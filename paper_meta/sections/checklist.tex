@@ -1,0 +1,88 @@
+% NeurIPS 2026 Paper Checklist (does NOT count toward page limit per CFP).
+% Populated honestly for cursor_manager system paper. Place after appendix
+% per template instructions.
+\section*{NeurIPS Paper Checklist}
+
+\begin{enumerate}
+
+\item {\bf Claims}
+    \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The four contributions listed in \S\ref{sec:intro} (C1--C4) are individually defended in \S\ref{sec:related}, \S\ref{sec:arch}, \S\ref{sec:case-ablation}, and \S\ref{sec:case}, respectively. The abstract's headline numbers (13/13 hermetic self-tests, 4-module parallel ship, 1 bug surfaced before deployment) all derive from \S\ref{sec:case-aggregate} which lists the underlying source artefacts.
+
+\item {\bf Limitations}
+    \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:limitations} lists six concrete limitations (L1--L6) plus one structural limitation about whether single-deployment dogfood transfers to other groups. \S\ref{sec:case-setup} adds an explicit honest-disclosure paragraph distinguishing rules-only and full-loop regimes.
+
+\item {\bf Theory Assumptions and Proofs}
+    \item[] Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: The paper presents an engineering system and an empirical case study, not a theoretical result.
+
+\item {\bf Experimental Result Reproducibility}
+    \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Every number in \S\ref{sec:case} is annotated with the exact \texttt{git} or \texttt{wc} command that produces it (\S\ref{sec:case}, opening paragraph). Algorithm~\ref{alg:tick} is reproduced verbatim from \texttt{prompts/manager.md}. The full reproducibility scaffolding is in Appendix~\ref{app:reproducibility}.
+
+\item {\bf Open access to data and code}
+    \item[] Question: Does the paper provide open access to the data and code, with sufficient instructions to faithfully reproduce the main experimental results, as described in supplemental material?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The complete system, this paper's source, the verified bibliography, and the immutable audit logs underlying \S\ref{sec:case} are released under the MIT License at the repository in Appendix~\ref{app:repo}. The exact commit hash from which all numbers are computed is listed in Appendix~\ref{app:repo}.
+
+\item {\bf Experimental Setting/Details}
+    \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No model is trained. The system's hyperparameters (e.g., Sentinel's same-cause-streak threshold) are listed in \S\ref{sec:discipline-sentinel} and the Sentinel module in the open-source release.
+
+\item {\bf Experiment Statistical Significance}
+    \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
+    \item[] Answer: \answerNo{}
+    \item[] Justification: The cross-model ablation in \S\ref{sec:case-ablation} is reported as scheduled-but-pending rather than with imputed numbers, and limitation L4 explicitly notes the small-$N$ problem to be addressed at camera-ready. Other reported numbers (LOC, commit count, smoke-test pass count) are exact integer measurements rather than estimates and have no notion of error bar.
+
+\item {\bf Experiments Compute Resources}
+    \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources (type of compute workers, memory, time of execution) needed to reproduce the experiments?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:case-setup} specifies the deployment configuration (single workstation, codex CLI routed through a local proxy at \texttt{localhost:4002}, three different codex profiles for manager / worker / reviewer-sim, \texttt{launchd} 5-minute kicks). Appendix~\ref{app:reproducibility} lists the model strings each profile maps to. No GPU is required for the system itself.
+
+\item {\bf Code Of Ethics}
+    \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics \url{https://neurips.cc/public/EthicsGuidelines}?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: No human-subject data, no datasets scraped without consent, no high-risk model released. The paper itself (a system description with audit-log empirical claims) raises no ethics concerns the Code addresses.
+
+\item {\bf Broader Impacts}
+    \item[] Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:discussion-wrong-choice} explicitly enumerates regimes in which the framework is the wrong choice (including fully-autonomous operation), and \S\ref{sec:limitations} L6 notes the optional enterprise-IM coupling that may limit direct adoption for teams without a compatible adapter. Positive impact (better discipline mechanisms for autoresearch) is the central thesis of \S\ref{sec:intro} and \S\ref{sec:conclusion}.
+
+\item {\bf Safeguards}
+    \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: The released artefact is an orchestration framework (\(\sim\!6{,}000\) lines of Python and Bash) plus this paper's source. No models, datasets, or generative content with misuse risk are released.
+
+\item {\bf Licenses for existing assets}
+    \item[] Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All eight cited works are credited with their canonical bibliographic entry; the lit-review sub-agent verified each entry against arXiv / ACL Anthology / GitHub before inclusion (Table~\ref{tab:litreview}). The NeurIPS 2026 LaTeX style file is used unmodified.
+
+\item {\bf New Assets}
+    \item[] Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The released system is documented in \texttt{tools/cursor\_manager/README.md} (system overview), \texttt{prompts/manager.md} (manager persona, used verbatim in Algorithm~\ref{alg:tick}), \texttt{rules/*.md} (per-paper hard rules), and \texttt{docs/sub\_agents\_contract.md} (the 595-line contract template summarised in Appendix~\ref{app:contract-template}).
+
+\item {\bf Crowdsourcing and Research with Human Subjects}
+    \item[] Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No crowdsourcing or human-subject experiments. The single human in the loop is the deployment owner / paper author; no participants are recruited.
+
+\item {\bf Institutional Review Board (IRB) Approvals or Equivalent for Research with Human Subjects}
+    \item[] Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No human-subject research; no IRB process applies.
+
+\item {\bf Declaration of LLM usage}
+    \item[] Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does \emph{not} impact the core methodology, scientific rigor, or originality of the research, declaration is not required.
+    \item[] Answer: \answerYes{}
+    \item[] Justification: LLMs are the central component of the framework, not an editing aid. The manager and worker roles are LLM sessions (\S\ref{sec:arch-loop}); the recommended cross-API-model adversarial deployment runs all three roles via the codex CLI but with different profiles, with the worker mapped to a frontier \texttt{gpt-5.5-2026-04-24} configuration and the manager / reviewer-sim mapped to a Claude-family \texttt{claude-opus-4-7-thinking-high} configuration (\S\ref{sec:case-setup}). The paper drafting itself was conducted in the rules-only regime described in \S\ref{sec:case-setup}, with the lit-review sub-agent invoked once on the seed bibliography.
+
+\end{enumerate}

@@ -1,0 +1,122 @@
+% cursor_manager meta paper -- bibliography (v2, 2026-05-03 verified).
+%
+% All entries verified against arXiv HTML citation_meta / ACL Anthology /
+% GitHub API by lit-review subagent prior to draft. Provenance + caveats in
+% per-entry comments.
+%
+% Hard rule HR-E: every entry has been verified to exist on a primary source
+% (arXiv / ACL Anthology / GitHub). If you discover a wrong field, raise
+% [BLOCKED-DECISION] -- do not silently rewrite.
+
+% --------------------------------------------------------------------- core
+% PaperOrchestra: arXiv:2604.05018, submitted 2026-04-06; no DOI yet.
+@article{song2026paperorchestra,
+  title   = {{PaperOrchestra}: A Multi-Agent Framework for Automated {AI} Research Paper Writing},
+  author  = {Song, Yiwen and Song, Yale and Pfister, Tomas and Yoon, Jinsung},
+  year    = {2026},
+  journal = {arXiv preprint arXiv:2604.05018},
+  url     = {https://arxiv.org/abs/2604.05018},
+}
+
+% Sibyl Research System: open-source software inspired by FARS, AI Scientist,
+% and AutoResearch (per the project README). NOT the same as FARS, which is
+% a separate industrial-scale system from Analemma (see fars2026analemma).
+@misc{sibyl2026system,
+  title        = {{Sibyl} Research System: Fully Autonomous {AI} Research},
+  author       = {{Sibyl Research Team}},
+  year         = {2026},
+  howpublished = {Open-source software, \url{https://github.com/Sibyl-Research-Team/sibyl-research-system}},
+  note         = {Built on Claude Code with $\geq$~20 specialized agents and a
+                  19-stage pipeline; the project README acknowledges
+                  inspiration from FARS, AI Scientist, and AutoResearch.
+                  Cited as software due to absence of a standalone arXiv
+                  preprint.},
+}
+
+% FARS: Fully Automated Research System -- the industrial-scale autoresearch
+% deployment from Analemma (Sun Tianxiang's company). Live deployment Feb
+% 2026: 100 papers in 228h 28m 33s, 11.4B tokens, ~$104k, 160 GPUs, mean
+% Stanford Agentic Reviewer score 5.05 (vs ICLR 2026 acceptance threshold
+% 5.39 and human submission average 4.21). Primary source: blog post +
+% live dashboard. No standalone arXiv paper.
+@misc{fars2026analemma,
+  title        = {{FARS}: A Fully Automated Research System},
+  author       = {Sun, Tianxiang and {Analemma Team}},
+  year         = {2026},
+  howpublished = {Blog post and live deployment, \url{https://analemma.ai/blog/introducing-fars}},
+  note         = {February 2026 deployment: 100 short papers in 228 hours
+                  on a 160-GPU cluster, mean Agentic Reviewer score 5.05
+                  on the ICLR scale (range 3.0--6.3), below the ICLR 2026
+                  acceptance threshold of 5.39 and above the human submission
+                  average of 4.21. 11.4 billion tokens consumed at
+                  $\sim$\$104{,}000 total cost.},
+}
+
+% AI Scientist v2: arXiv:2504.08066, ICLR 2025 workshop "I Can't Believe It's
+% Not Better" accepted (1 of 3 submissions). 8 authors.
+@article{yamada2025aiscientistv2,
+  title   = {The {AI} Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search},
+  author  = {Yamada, Yutaro and Lange, Robert Tjarko and Lu, Cong and Hu, Shengran
+             and Lu, Chris and Foerster, Jakob and Clune, Jeff and Ha, David},
+  year    = {2025},
+  journal = {arXiv preprint arXiv:2504.08066},
+  url     = {https://arxiv.org/abs/2504.08066},
+  note    = {One of three submitted papers accepted at the ICLR 2025 workshop
+             ``I Can't Believe It's Not Better'' after standard peer review.},
+}
+
+% Karpathy autoresearch: canonical repo name is lowercase. 78,590 stars on
+% 2026-05-03. Created 2026-03-06.
+@misc{karpathy2026autoresearch,
+  title        = {{autoresearch}},
+  author       = {Karpathy, Andrej},
+  year         = {2026},
+  howpublished = {Open-source software, \url{https://github.com/karpathy/autoresearch}},
+  note         = {AI agents running research on single-GPU nanochat training
+                  automatically. 78{,}590 stars as of 2026-05-03.},
+}
+
+% Agent Laboratory: arXiv:2501.04227 + EMNLP 2025 Findings (Anthology
+% 2025.findings-emnlp.320). 10 authors.
+@inproceedings{schmidgall2025agentlaboratory,
+  title     = {Agent Laboratory: Using {LLM} Agents as Research Assistants},
+  author    = {Schmidgall, Samuel and Su, Yusheng and Wang, Ze and Sun, Ximeng
+               and Wu, Jialian and Yu, Xiaodong and Liu, Jiang and Moor, Michael
+               and Liu, Zicheng and Barsoum, Emad},
+  year      = {2025},
+  booktitle = {Findings of the Association for Computational Linguistics: EMNLP 2025},
+  url       = {https://aclanthology.org/2025.findings-emnlp.320},
+  doi       = {10.18653/v1/2025.findings-emnlp.320},
+}
+
+% --------------------------------------------------------------- supporting
+
+% AI Scientist v1: arXiv:2408.06292, 6 authors.
+@article{lu2024aiscientist,
+  title   = {The {AI} Scientist: Towards Fully Automated Open-Ended Scientific Discovery},
+  author  = {Lu, Chris and Lu, Cong and Lange, Robert and Foerster, Jakob
+             and Clune, Jeff and Ha, David},
+  year    = {2024},
+  journal = {arXiv preprint arXiv:2408.06292},
+  url     = {https://arxiv.org/abs/2408.06292},
+}
+
+% AI-Researcher: arXiv:2505.18705, 4 authors.
+@article{tang2025airesearcher,
+  title   = {{AI-Researcher}: Autonomous Scientific Innovation},
+  author  = {Tang, Jiabin and Xia, Lianghao and Li, Zhonghang and Huang, Chao},
+  year    = {2025},
+  journal = {arXiv preprint arXiv:2505.18705},
+  url     = {https://arxiv.org/abs/2505.18705},
+}
+
+% Paper Reconstruction Evaluation: arXiv:2604.01128, 6 authors. Submitted
+% 2026-04-01.
+@article{miyai2026paperreconstruction,
+  title   = {Paper Reconstruction Evaluation: Evaluating Presentation and Hallucination in {AI}-written Papers},
+  author  = {Miyai, Atsuyuki and Toyooka, Mashiro and Zhao, Zaiying
+             and Watanabe, Kenta and Yamasaki, Toshihiko and Aizawa, Kiyoharu},
+  year    = {2026},
+  journal = {arXiv preprint arXiv:2604.01128},
+  url     = {https://arxiv.org/abs/2604.01128},
+}

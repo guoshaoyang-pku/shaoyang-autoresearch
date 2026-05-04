@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local secrets (copy from keys.example.json)
+keys.json
+
+# Local machine config (copy from config.example.toml)
+config.toml
+
+# macOS
+.DS_Store
+
+# Optional: local codex / IDE state under repo (if ever created)
+.codex/

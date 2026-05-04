@@ -1,0 +1,83 @@
+% Section 1 -- Introduction. Pages target ~1.25.
+% Defends C1 (discipline > scale).
+\section{Introduction}
+\label{sec:intro}
+
+Frontier API tiers and local model proxies have, over the past
+twelve months, made inference token budget effectively unbounded for
+research-scale autonomous agents. A single Codex CLI invocation at the
+highest reasoning effort can consume tens of thousands of tokens of
+internal deliberation per turn, and a multi-day deployment
+that runs such a turn every five minutes is no longer dollar-prohibitive
+for a single graduate student. By the obvious extrapolation, the
+bottleneck for LLM-driven autoresearch should no longer be how much the
+system is allowed to think.
+
+The actual track record of autonomous-paper-writing systems against
+this prediction is mixed in an instructive way. Agentic frameworks
+have produced steadily improving outputs on benchmarks such as
+PaperWritingBench \citep{song2026paperorchestra} and
+reconstruction-evaluation benchmarks
+\citep{miyai2026paperreconstruction}, and one prior end-to-end system
+has obtained a peer-reviewed acceptance at a single ICLR workshop
+\citep{yamada2025aiscientistv2}. The largest-deployment evidence,
+\citet{fars2026analemma}'s 228-hour, 100-paper, 11.4-billion-token
+February 2026 run, scored a mean of 5.05 on a calibrated
+ICLR-equivalent reviewer -- below the ICLR 2026 acceptance threshold
+of 5.39 (\S\ref{sec:related}). To our knowledge, no published
+autoresearch system has obtained an acceptance on the primary track
+of a top-tier conference. The prediction that adding tokens or scale
+would dissolve the gap is therefore not borne out by either the
+small-deployment line of work or by the largest-deployment evidence
+available.
+
+We argue the gap is not a token-budget problem and not a
+model-capability problem. It is a discipline problem. Four failure
+modes are unaddressed by adding more tokens or more capability:
+\emph{claim drift} (an Abstract sentence silently rewritten to read
+more crisply at the cost of what the paper asserts);
+\emph{citation hallucination} at a rate that is modest in expectation
+but unacceptable in absolute terms for a submission;
+\emph{reward hacking} on LLM-judge self-review, because same-model
+self-review favors the rhetorical patterns the model itself produces;
+and \emph{silent failure} of long-horizon agentic loops (we observed
+a 24-hour stretch of identical exit-code-1 failures that produced no
+notification because no watchdog had been wired up). Each is
+addressable by constraining the agent's action space rather than by
+giving it more capability or more compute. We propose
+\texttt{cursor\_manager}, an adversarial framework with a paranoid
+manager~LLM, a paper-writing worker~LLM, and four discipline
+mechanisms targeting one failure mode each: hard-rule enforcement
+(\S\ref{sec:discipline-rules}); a \texttt{[BLOCKED-DECISION]}
+escalation protocol (\S\ref{sec:discipline-blocked}); cross-model
+adversarial review (\S\ref{sec:discipline-crossmodel}); and a Sentinel
+watchdog with out-of-band notification
+(\S\ref{sec:discipline-sentinel}).
+
+\paragraph{Contributions.}
+\textbf{(C1)} We argue empirically (\S\ref{sec:related}) that the
+binding constraint for autoresearch is discipline, not token budget,
+comparing against six recent autoresearch frameworks
+\citep{lu2024aiscientist,yamada2025aiscientistv2,schmidgall2025agentlaboratory,karpathy2026autoresearch,sibyl2026system,fars2026analemma}
+and the closest writing-only system \citep{song2026paperorchestra}.
+\textbf{(C2)} We present a manager-worker adversarial loop with
+persistent state and atomic operational primitives (\S\ref{sec:arch})
+that occupies an axis orthogonal to scale-throughput systems
+\citep{fars2026analemma,sibyl2026system}: rather than maximize
+throughput at borderline-reject quality, we ask what discipline
+mechanisms move a single in-progress paper from the 5.05 band into
+the $\geq 6$ accept-decision band.
+\textbf{(C3)} We introduce cross-API-model adversarial review --
+operationalized in the codex-only loop by giving the worker and the
+reviewer-sim sub-agent \emph{different} codex profiles that map to
+different underlying API models -- and demonstrate by ablation that it
+reduces reward hacking on the LLM judge relative to same-model
+self-review (\S\ref{sec:case-ablation}).
+\textbf{(C4)} We propose a four-mechanism discipline contract
+(hard-rule, BLOCKED-DECISION, cross-model review, Sentinel watchdog)
+intended to lift multi-agent paper writing from benchmark grade to
+submission grade; each mechanism is individually ablated in
+\S\ref{sec:case}. All numbers in \S\ref{sec:case} are queried from
+immutable audit logs; the system source, this paper's source, and the
+paper's complete commit history are released as a single git
+repository (link in Appendix~\ref{app:repo}).

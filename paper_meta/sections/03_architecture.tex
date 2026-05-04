@@ -1,0 +1,168 @@
+% Section 3 -- Architecture. Pages target ~2.0.
+% Defends C2 (manager-worker simple beats debate).
+\section{Architecture}
+\label{sec:arch}
+
+The system has three persistent objects: a \emph{manager} LLM session, a
+\emph{worker} LLM session per paper, and a git \emph{worktree} per worker.
+Everything else is short-lived and either re-derived from these objects on
+demand or written into an append-only audit log. We describe the loop
+(\S\ref{sec:arch-loop}), the operational lever
+(\S\ref{sec:arch-mgr}), and the contract pattern that allowed four sub-agent
+modules to ship in parallel (\S\ref{sec:arch-contract}).
+
+\subsection{Manager-Worker Adversarial Loop}
+\label{sec:arch-loop}
+
+The manager LLM is a long-lived chat session with a paranoid-reviewer
+persona; the worker LLM is a long-lived chat session with a paper-writer
+persona; both are persisted across process restarts via the codex CLI's
+resume mechanism, \texttt{codex exec resume <session\_id>}, with the
+session id captured from the first turn's stdout
+(\S\ref{sec:arch-contract}). The codex-only invariant -- the in-loop
+manager, worker, and reviewer-sim all run via \texttt{codex} with
+different \texttt{--profile} keys -- removes the cross-CLI brittleness
+that an earlier prototype carried (cursor-agent has been removed from
+the loop; the binary is unavailable on remote GPU hosts and tokens are
+not portable across platforms).
+A scheduler (\texttt{launchd},
+\texttt{cron}, or \texttt{nohup} loop) wakes the manager every five minutes
+with a single token of input -- ``\texttt{tick now (<iso8601>)}'' -- so the
+manager runs exactly when poked rather than busy-polling.
+Algorithm~\ref{alg:tick} reproduces the manager's standard tick procedure
+verbatim from its persona prompt.\footnote{Verbatim because we discovered
+during dogfood that paraphrasing the procedure in the paper but leaving
+the prompt unchanged was itself a hard-rule violation candidate (HR-J in
+\S\ref{sec:discipline-rules}).}
+
+\begin{algorithm}[t]
+\small
+\caption{Manager tick loop (one invocation per scheduler kick).}
+\label{alg:tick}
+\begin{algorithmic}[1]
+\State \texttt{state} $\gets$ \texttt{mgr status <wid>} \Comment{worker run + worktree git status}
+\If{\texttt{state.run.status} is \texttt{RUNNING} and \texttt{elapsed} $<$ \texttt{max\_run\_seconds}}
+    \State \textbf{return} \texttt{\{action: skip, reason: ``in progress''\}}
+\ElsIf{\texttt{state.run.status} is \texttt{RUNNING} and \texttt{elapsed} $\geq$ \texttt{max\_run\_seconds}}
+    \State \texttt{out} $\gets$ \texttt{mgr output <wid>}; decide hung vs.\ legitimately long
+    \State on hung: \texttt{mgr cancel}, \texttt{mgr escalate}, \textbf{return}
+\EndIf
+\If{\texttt{state.run.id} $=$ \texttt{state.last\_processed\_run\_id}}
+    \State \textbf{goto} step~\ref{algline:newrun} \Comment{no new evidence, dispatch next task}
+\EndIf
+\State \texttt{commits} $\gets$ \texttt{mgr commits <wid> -n 10}
+\If{any commit subject starts with \texttt{[BLOCKED-DECISION]}}
+    \State \texttt{mgr escalate <wid>}; \textbf{return} \texttt{\{action: escalate\}}
+\EndIf
+\State \texttt{diff} $\gets$ \texttt{mgr diff <wid>}; \texttt{rules} $\gets$ \texttt{mgr rules <wid>}
+\State Check each hard rule against \texttt{diff} citing concrete file:line evidence
+\If{paper-claim file (abstract / intro / conclusion) touched \textbf{or} diff $\geq 2$ files}
+    \State \texttt{mgr review-sim <wid>} \Comment{cross-model NeurIPS-reviewer judgement}
+\EndIf
+\If{any rule violated and not auto-correctable}
+    \State \texttt{mgr escalate <wid>}; \textbf{return} \texttt{\{action: escalate\}}
+\ElsIf{rule violated and auto-correctable}
+    \State \texttt{mgr cancel}; \texttt{mgr start <wid> -p ``<corrective prompt>''}
+\Else
+    \State \label{algline:newrun} \texttt{mgr start <wid> -p ``<next-step prompt>''}
+\EndIf
+\State \texttt{mgr mark-processed <wid> --run-id <id> --verdict <v> --summary <s>}
+\State Emit single-line JSON audit \texttt{\{tick\_at, worker, action, summary, run\_id\}}
+\end{algorithmic}
+\end{algorithm}
+
+Two structural properties distinguish this loop from existing multi-agent
+paper-writing systems. First, manager and worker have \emph{adversarial
+roles by construction}: the manager's persona prompt states that it is
+not present to help the worker but to prevent wrong-but-plausible
+commits, and all communication between them goes through the manager's
+reading of worker-produced git commits rather than direct dialog.
+Second, the manager is \emph{stateless within a tick} but persistent
+\emph{across} ticks: each wake-up loads only the small \texttt{state}
+JSON and the manager's own chat history, never the worker's, so the
+manager cannot be talked out of a verdict by a verbose worker.
+
+\subsection{The mgr CLI as the only lever}
+\label{sec:arch-mgr}
+
+The manager LLM is given exactly one tool, a Python CLI named \texttt{mgr}
+with thirteen atomic operations: four \emph{read} operations
+(\texttt{workers}, \texttt{status}, \texttt{commits}, \texttt{diff}) for
+inspecting worker state and worktree git diffs; three \emph{introspection}
+operations (\texttt{output}, \texttt{rules}, \texttt{audit},
+\texttt{log}, \texttt{escalations}) for reading worker stdout, the
+worker's own hard-rules file, the manager's tick audit history, the
+event stream, and the pending escalation queue; three \emph{control}
+operations (\texttt{start}, \texttt{cancel}, \texttt{escalate}) for
+forking / killing worker processes and marking items for human
+decision; and one \emph{state} operation
+(\texttt{mark-processed}) for recording a verdict against a run id.
+The four v2 sub-agent commands of \S\ref{sec:discipline}
+(\texttt{review-sim}, \texttt{lit-review}, \texttt{sentinel-tick},
+\texttt{backend-test}) are wired in identically. The manager cannot edit
+files directly, run \texttt{git push}, change worker prompts, or call
+any LLM other than itself; every action it wants to take must factor
+through one of these atoms. The Python implementation of the CLI is
+\(770\) lines (out of \(5{,}969\) total LOC for the system in Python
+plus Bash, measured by \texttt{wc -l mgr lib/*.py sentinel.py
+scripts/\{*.py,*.sh\} *.sh}); this
+restriction is deliberate -- the manager's job is operational reasoning,
+not authoring, and constraining its action space prevents the most
+common failure mode of prior systems where a critic agent quietly
+rewrites the artifact it is supposed to be critiquing.
+
+The worker, by contrast, has free shell access inside its git worktree --
+it can write any file, run \texttt{pdflatex}, query Semantic Scholar, and
+push to its own isolated branch -- but it cannot read or write any state
+outside its worktree, including the manager's persona, other workers'
+worktrees, or the audit logs. This asymmetry is what makes the loop
+adversarial without being deadlocked: the worker has the authoring
+privilege, the manager has the verdict privilege, and each can do exactly
+the things the other cannot.
+
+Worker isolation uses standard \texttt{git worktree}: multiple
+workers share one repository clone, commit to disjoint branches, do
+not see each other's edits, and never push to remote (commits
+accumulate on the local worker branch until a human merges them via
+a non-fast-forward merge). All audit logs are append-only JSONL
+written by \texttt{mgr} and form the immutable ground truth that
+\S\ref{sec:case} mines for empirical claims.
+
+\subsection{Sub-agent Contract Design}
+\label{sec:arch-contract}
+
+The four v2 sub-agents (\texttt{reviewer\_sim}, \texttt{lit\_review},
+\texttt{sentinel}, \texttt{codex\_worker}; \S\ref{sec:discipline}) were
+implemented in parallel by four LLM-driven implementation streams in
+under thirty wall-clock minutes -- a wall-clock improvement of
+approximately two orders of magnitude over our initial three-to-four
+work-day estimate. The mechanism is what we call a \emph{sub-agent
+contract}: a single Markdown file
+(\texttt{docs/sub\_agents\_contract.md}, 595 lines) that fully specifies,
+for each module to be shipped in parallel,
+
+(i) the exact set of files the implementer is allowed to create or
+modify, plus an explicit ``do not touch'' list naming all sibling
+sub-agents' files; (ii) the public Python API (function signatures,
+return-value dataclasses, exceptions raised); (iii) the JSON / Markdown
+output schema written to
+\texttt{state/<module>/<wid>/<run\_id>.\{json,md\}}; (iv) a self-test
+(\texttt{python -m lib.<module> --self-test}) that must run
+hermetically in under ten seconds with zero network calls; and (v) the
+parent \texttt{mgr} subcommand wiring (argparse arguments, return
+codes, stdout format).
+
+Because every public surface that crosses module boundaries is named in
+the contract, the implementation streams can run completely in parallel
+with zero shared mutable state and zero coordination overhead. We
+verified the resulting modules contain zero cross-imports between
+sibling sub-agents and integrate cleanly into the parent \texttt{mgr}
+CLI through a single hand-authored 80-line factory function. The
+thirteen-pass smoke test (\texttt{scripts/smoke\_test\_sub\_agents.sh})
+runs all four self-tests plus the parent argparse wiring in under two
+seconds and was the gating criterion for the integration commit.
+
+We position contract-first parallel agent shipping as a methodological
+contribution in its own right (independent of the discipline mechanisms
+it enables) and give the full contract template in
+Appendix~\ref{app:contract-template}.

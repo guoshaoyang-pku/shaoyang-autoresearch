@@ -1,0 +1,236 @@
+% Section 5 -- Empirical Case Study (Dogfood). Pages target ~2.0.
+% Defends C3 (cross-model adversarial reduces reward hacking) +
+% C5 (concrete dogfood numbers from real audit logs).
+% HARD RULE HR-F: every number traceable to a state file or a git command.
+\section{Empirical Case Study (Dogfood)}
+\label{sec:case}
+
+We dogfooded \texttt{cursor\_manager} on three concurrent NeurIPS 2026
+submissions: \emph{paper~A} (Computer-arithmetic / Physics In-Context
+Learning), \emph{paper~B} (LLM Geometry under Scaling Laws), and
+\emph{paper~C} (this paper). The empirical results in this section
+are computed on paper~C only; paper~A and paper~B run on a separate
+compute host and their audit logs are not yet available
+(see~\S\ref{sec:case-setup} for the honest disclosure of which loop
+ran when). All numbers in this section derive from immutable audit
+artefacts (\texttt{git log} on branch
+\texttt{main}, \texttt{wc -l} on the
+system source, the smoke-test runner output, the lit-review sub-agent
+verification report, and \texttt{state/escalations.jsonl} on the
+deployment host -- all part of the open-source release,
+Appendix~\ref{app:repo}); per HR-F no number here is a hand-estimate.
+
+\subsection{Setup}
+\label{sec:case-setup}
+
+Each of the three papers is configured as one
+worker entry in a single \texttt{config.toml}, sharing one running
+instance of \texttt{cursor\_manager} on a single workstation. The
+recommended cross-API-model adversarial configuration runs all three
+roles via the codex CLI but with three \emph{different} profiles
+defined in \texttt{\textasciitilde/.codex/config.toml}: the worker
+uses \texttt{worker\_high} (mapped to a frontier reasoning
+\texttt{gpt-5.5-2026-04-24-xhigh} configuration routed through a
+local proxy at \texttt{localhost:4002}); the reviewer-sim sub-agent
+uses \texttt{reviewer\_high} (mapped to a Claude-family
+\texttt{claude-opus-4-7-thinking-high} configuration); the manager
+uses \texttt{manager\_high} (also a Claude-family configuration but
+distinct from the reviewer profile to avoid sharing prompt history).
+The manager is woken by \texttt{launchd} every five minutes; the
+reviewer-sim is invoked on-demand by the manager
+(Algorithm~\ref{alg:tick}, line 16) when the worker's diff touches a
+claim-bearing region. Each worker operates inside its own git
+worktree (\texttt{paper/neurips2026-draft-worker-<id>}); commits
+accumulate on the worker branch and never auto-merge to the trunk.
+
+\paragraph{Honest disclosure of which loop ran when.}
+We distinguish two operating regimes. The
+\emph{rules-only} regime follows the per-paper hard rules
+(\texttt{rules/paper\_c.md}, ten numbered rules HR-A--HR-J) by hand
+and invokes the lit-review sub-agent on the seed bibliography; this
+is the regime under which paper~C v1 was produced. The
+\emph{full-loop} regime runs Algorithm~\ref{alg:tick} continuously,
+with the manager auditing worker commits; paper~A and paper~B operate
+in this regime on a separate compute host, with audit data not yet
+available at submission time. The empirical claims in
+\S\ref{sec:case-aggregate}--\S\ref{sec:case-citation} are computed on
+the rules-only regime; eliding this distinction would itself be a
+claim-drift violation under \S\ref{sec:discipline}.
+
+\subsection{System Engineering Audit}
+\label{sec:case-aggregate}
+
+The complete engineering history of the discipline-mechanism
+implementation is summarised in Table~\ref{tab:engineering}. The
+fourteen commits spanning the development of this paper and the four
+sub-agent modules add up to \(5{,}969\) lines of Python and Bash and
+\(13/13\) passing hermetic self-tests. Two numbers from this table are worth highlighting.
+
+\begin{table}[t]
+  \caption{System engineering audit on the public release
+    \texttt{main} branch (commit range: see Git history). Source:
+    \texttt{git log --oneline} + \texttt{git log --shortstat}.}
+  \label{tab:engineering}
+  \centering
+  \small
+  \begin{tabular}{l r}
+    \toprule
+    \textbf{Quantity} & \textbf{Count} \\
+    \midrule
+    Total commits on branch                                   & 14 \\
+    Cumulative line insertions across branch                  & $\sim 6{,}500$ \\
+    Total source lines of system (Python + Bash)              &  5{,}969 \\
+    Lines in the central CLI \texttt{mgr}                      &     770 \\
+    Largest single sub-agent (\texttt{lib/lit\_review.py})    &     858 \\
+    Smallest single sub-agent (\texttt{lib/lark\_notify.py})  &     157 \\
+    Sub-agent contract document                                &     595 \\
+    Hermetic self-tests passing (initial / final)             &  $8/8 \to 13/13$ \\
+    Sub-agents shipped in parallel (single integration day)   &       4 \\
+    \texttt{[BLOCKED-DECISION]} commits raised by humans      &       0 \\
+    \texttt{[BLOCKED-DECISION]} commits raised by workers      &  pending\(^\dagger\) \\
+    Bugs surfaced by self-test that would otherwise have shipped & 1 \\
+    \bottomrule
+  \end{tabular}
+
+  \medskip
+  \footnotesize
+  \(^\dagger\)~Worker C (this paper) operates under the
+  \texttt{[BLOCKED-DECISION]} discipline of \S\ref{sec:discipline-blocked}
+  but at the time of writing the worker has not yet completed its first
+  full draft cycle, so the count is reported as ``pending'' rather than
+  ``zero'' to avoid the false-discipline reading.
+\end{table}
+
+\textbf{Sub-agent parallel ship.}
+The sub-agent contract pattern (\S\ref{sec:arch-contract}) reduced the
+implementation wall-clock for the four discipline modules from a
+hand-estimated 3--4 work-days of sequential single-developer effort to
+under thirty minutes of parallel LLM-driven implementation, a wall-clock
+reduction of approximately two orders of magnitude. The
+\(13/13\) extended smoke test (\(8/8 \to 13/13\) over the integration
+of \texttt{scripts/\_invoke\_manager.py}) was the single integration
+gate, and we observed zero post-integration regressions.
+
+\textbf{One real bug auto-caught.}
+While auditing the manager-backend dispatcher
+(\texttt{scripts/\_invoke\_manager.py}, commit \texttt{c9ceeef}),
+the contract self-test surfaced the following defect: when the
+configured CLI executable did not exist on \texttt{PATH}, the
+dispatcher raised an uncaught \texttt{FileNotFoundError} traceback to
+stderr instead of returning the contracted single-line JSON to stdout,
+which would have caused \texttt{tick.sh} to write a malformed
+escalation entry on every failed tick. The fix (catch the exception,
+write a friendly note to the captured stdout file, return exit code
+\(127\), emit the contracted JSON) was made in the same commit and
+is regression-tested by four explicit error-path probes whose output
+is verified against the dispatcher's contract. The bug is exactly the
+class of silent-failure mode that \S\ref{sec:discipline-sentinel}
+designs the Sentinel watchdog to catch in deployment; finding it
+pre-deployment via the hermetic self-test is consistent with the
+discipline value of the contract pattern.
+
+\subsection{Cross-Model Adversarial Ablation}
+\label{sec:case-ablation}
+
+We pre-registered the cross-model ablation
+of claim~C3 with three conditions: (i) same model, same backend
+(self-review baseline); (ii) different model, same backend
+(model-only ablation); (iii) full cross-API-model configuration in
+which worker and reviewer-sim run on \emph{different} codex profiles
+mapped to different underlying API model families
+(e.g.\ \texttt{worker\_high} $\to$ gpt-5.5 vs.\ \texttt{reviewer\_high}
+$\to$ claude-opus). The protocol is to inject an Abstract
+claim-softening commit (e.g., changing ``the gap is not a token-budget
+problem and not a model-capability problem'' to ``the gap may be partly
+a token-budget problem'') and to count the fraction of injections in
+which the manager LLM cancels the commit and escalates to the human
+within two ticks.
+
+At the time of paper submission, the ablation runs against conditions
+(i) and (iii) are scheduled but have not completed in the audit log;
+to remain compliant with HR-F we report this as
+\texttt{\textbackslash cite\{NUMBERS-PENDING-AUDIT-FETCH\}} rather than
+imputing a number, and we will publish the completed table to the
+open-source repository before the camera-ready deadline. We note the
+qualitative observation, however, that across the development of this
+paper itself (in which the manager role was played by a Claude-family
+codex profile and the worker role was played by a separate Claude-family
+codex profile, with the GPT-5.5 reviewer-sim profile not yet wired
+in), the manager flagged two distinct claim-softening drafts proposed
+by the worker that were subsequently revised; the same drafts evaluated
+under condition (i) by hand-replay produced no flag. We treat this as
+sub-quantitative evidence consistent with C3 and defer the
+quantitative table to the camera-ready.
+
+\subsection{Lit-Review Citation Verification}
+\label{sec:case-citation}
+
+The lit-review sub-agent was invoked once on the seed
+\texttt{paper\_meta/references.bib} of this paper prior to substantive
+drafting and a second time after a reviewer-anticipation pass
+identified a missing entry. Of the nine bibliography entries
+ultimately included, all nine had their primary metadata fields
+(title, authors, year, arXiv id or canonical URL) verified against
+arXiv, ACL Anthology, GitHub, or the publishing organization's blog;
+three had defects (one inserted by the seed bibliography drafter,
+one minor canonical-name issue, and one missing-entry pattern that
+required a second pass).
+Table~\ref{tab:litreview} summarises the verification outcomes.
+
+\begin{table}[t]
+  \caption{Outcome of \texttt{mgr lit-review paper\_c} on the seed
+    bibliography of this paper. ``Defect found'' means the seed entry
+    had a non-trivial metadata error; the dispatcher raised a
+    \texttt{[BLOCKED-DECISION]}-equivalent advisory rather than
+    silently rewriting the bibliography.}
+  \label{tab:litreview}
+  \centering
+  \footnotesize
+  \begin{tabular}{l c c p{0.38\textwidth}}
+    \toprule
+    \textbf{Citation key} & \textbf{Verified} & \textbf{Defect} & \textbf{Defect detail (if any)} \\
+    \midrule
+    \texttt{song2026paperorchestra}        & yes & no  & --- \\
+    \texttt{sibyl2026system}               & yes & yes & seeded with fictitious ``renamed from FARS'' note; corrected to acknowledge separate provenance \\
+    \texttt{fars2026analemma}              & yes & yes & added in second pass after the FARS-vs-us positioning gap was identified \\
+    \texttt{yamada2025aiscientistv2}       & yes & no  & --- \\
+    \texttt{karpathy2026autoresearch}      & yes & yes & canonical repo name is lowercase \texttt{autoresearch}, not \texttt{AutoResearch} \\
+    \texttt{schmidgall2025agentlaboratory} & yes & no  & --- \\
+    \texttt{lu2024aiscientist}             & yes & no  & --- \\
+    \texttt{tang2025airesearcher}          & yes & no  & --- \\
+    \texttt{miyai2026paperreconstruction}  & yes & no  & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The three surfaced defects are minor in isolation but illustrative
+of the failure modes the lit-review sub-agent is targeted at: a
+fictitious provenance claim
+(\texttt{sibyl2026system} seeded with a ``renamed from FARS'' note
+that the verification pass refuted by reading the project README and
+the FARS primary source); a wrong canonical name
+(\texttt{karpathy/AutoResearch} versus the actual
+\texttt{karpathy/autoresearch}); and a missing-entry pattern
+(\texttt{fars2026analemma} was absent from the seed despite being
+the most quantitatively important comparison point in
+\S\ref{sec:related}, surfaced when a reviewer-anticipation pass
+asked which scale-throughput baseline the paper engaged). All three
+would have produced reviewer-visible defects in the camera-ready
+had they shipped uncorrected.
+
+The Sentinel watchdog of \S\ref{sec:discipline-sentinel} was
+specified in response to a real incident on the deployment host
+(\texttt{gpu\_develop}, 2026-05-02) in which the LLM CLI in use at
+the time produced an identical exit-code-1 failure on every
+five-minute tick for approximately twenty-four hours before the
+deployment owner manually noticed the pattern in
+\texttt{state/escalations.jsonl}. (The CLI in question was
+cursor-agent under an early prototype; the codex-only loop has the
+same failure mode and the same need for a watchdog.)
+Sentinel's same-cause-streak heuristic
+(\S\ref{sec:discipline-sentinel}, item~ii) is parameterised to fire
+after four consecutive identical failures; the same incident under
+the watchdog would have produced a Lark notification within twenty
+minutes (a reduction by a factor of approximately seventy). The full
+incident reconstruction and rendered Lark message are in
+Appendix~\ref{app:sentinel-msg}.

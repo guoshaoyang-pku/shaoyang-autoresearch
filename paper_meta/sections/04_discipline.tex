@@ -1,0 +1,124 @@
+% Section 4 -- Discipline Mechanisms. Pages target ~1.0.
+% Defends C4 (four-rule discipline contract suffices).
+\section{Discipline Mechanisms}
+\label{sec:discipline}
+
+The architecture of \S\ref{sec:arch} is necessary but not sufficient: a
+manager and a worker with adversarial roles will still produce
+benchmark-grade output, not submission-grade output, unless they are
+constrained by mechanisms that target the specific failure modes of
+LLM-driven autoresearch. We identify four such mechanisms and instrument
+each so that \S\ref{sec:case} can ablate it.
+
+\subsection{Hard-Rule Enforcement and Claim-Protected Zones}
+\label{sec:discipline-rules}
+
+Each worker is shipped with a paper-specific
+\texttt{rules/<paper>.md} file enumerating ten to fifteen numbered hard
+rules of two kinds: \emph{claim-protective} rules that name specific
+file regions or LaTeX labels the worker must not edit without an
+explicit human-decision request (e.g., the working title, a numbered
+core-claim list \texttt{C1}--\texttt{C5}, or a ``do not touch
+\textbackslash texttt\{sec:scaling-jump\}'' line for a claim under
+revision), and \emph{operational} rules that name observable artefacts
+the worker must produce (e.g., ``\texttt{pdflatex} must finish with zero
+content-level warnings, defined as \texttt{Reference}/\texttt{Citation}
+undefined or \texttt{Label may have changed}; cosmetic warnings from
+\texttt{neurips\_2026.sty} are explicitly allow-listed''). The manager's
+standard tick procedure (Algorithm~\ref{alg:tick}, line 14) requires
+checking each rule against the worker's diff with concrete
+file-and-line evidence; the failure mode addressed is the well-known
+tendency of LLMs to silently rewrite a paper's claim wording in pursuit
+of a shorter draft or smoother prose.
+
+\subsection{BLOCKED-DECISION Escalation Protocol}
+\label{sec:discipline-blocked}
+
+Workers are required to use the literal commit-subject prefix
+``\texttt{[BLOCKED-DECISION]}'' when they encounter a research-strategic
+question they cannot resolve unilaterally -- choice of submission
+venue, softening of a falsified claim, scope of an open-source
+release, or any item the human has explicitly listed as undecided in
+the worker's outline file. The manager treats any such commit as an
+unconditional escalation (Algorithm~\ref{alg:tick}, lines 11--12): no
+verdict is rendered, the commit is not merged, and the
+\texttt{escalations.jsonl} log is appended for human review. The failure
+mode addressed is the over-confident self-resolution of decisions that
+require human judgment, a class of error that on inspection of prior
+autoresearch traces is both common and difficult to detect at review
+time because the resulting commit is locally well-formed.
+
+\subsection{Cross-API-Model Adversarial Review}
+\label{sec:discipline-crossmodel}
+
+In a single-CLI loop the natural lever for cross-model adversarial
+review is the codex CLI's \texttt{--profile} flag, which selects an
+underlying API model from \texttt{\textasciitilde/.codex/config.toml}.
+The recommended deployment runs the worker on one codex profile (for
+example \texttt{worker\_high}, mapped to a frontier
+\texttt{gpt-5.5-2026-04-24-xhigh} configuration) and runs the
+reviewer-sim sub-agent on a \emph{different} codex profile (for
+example \texttt{reviewer\_high}, mapped to a Claude-family
+\texttt{claude-opus-4-7-thinking-high} configuration); the manager
+itself can use either. The reviewer-sim sub-agent
+(\texttt{lib/reviewer\_sim.py}, 445 lines) loads a NeurIPS-reviewer
+persona prompt (\texttt{prompts/reviewer\_sim\_neurips.md}) and the
+worker's most recent diff, and emits a structured Markdown report
+containing an overall score, a list of concerns each tagged as
+\texttt{claim-grounding}, \texttt{baseline}, \texttt{statistical-power},
+\texttt{novelty}, or \texttt{citation-gap}, and a recommendation in
+\(\{\texttt{accept},\texttt{borderline},\texttt{revise},\texttt{reject}\}\).
+The manager invokes \texttt{mgr review-sim} when the worker's diff
+touches a claim-bearing file (Algorithm~\ref{alg:tick}, line 16) and
+folds the score into its verdict. The failure mode addressed is
+\emph{reward hacking on the LLM judge}: same-family self-review is
+known to be vulnerable to stylistic patterns that the family itself
+favors, and using a different API model family for the judgment role
+materially reduces this vulnerability (we ablate this in
+\S\ref{sec:case-ablation}). The two reviewer roles in our system
+are \emph{complementary}, not redundant: the manager enforces a
+finite list of paper-specific hard rules, while reviewer-sim
+simulates the open-ended NeurIPS-reviewer judgment over the same
+diff. Going through a single CLI is a deliberate engineering choice:
+on the GPU hosts where the loop must run, codex is the only LLM CLI
+with a static binary distribution and portable token; an earlier
+prototype that mixed cursor-agent for one role and codex for another
+could not be ported to the remote environment without breaking
+either persistence or installability.
+
+\subsection{Sentinel Watchdog with Lark Notification}
+\label{sec:discipline-sentinel}
+
+Long-running autoresearch loops fail silently. We observed during early
+operation a 24-hour stretch in which the worker process exited with
+status~1 every five minutes, the manager dutifully logged ``\texttt{tick
+\_cli\_failed}'' to \texttt{escalations.jsonl}, and no human noticed
+because no notification was wired up. The Sentinel sub-agent
+(\texttt{sentinel.py}, 580 lines) is a hand-coded heuristic monitor
+that reads \texttt{state/manager\_audits/*.jsonl} and
+\texttt{state/escalations.jsonl} and triggers a Lark
+notification\footnote{Lark is the internal communications platform at
+the institution where this system was developed; the notifier is a
+thin wrapper around \texttt{lark-cli im +messages-send} and can be
+swapped for any other transport via the \texttt{lib/lark\_notify.py}
+adapter.} when one of four patterns is detected:
+(i) the same alert key recurs $\geq 3$ times within a configurable
+window; (ii) the worker process has produced an identical non-zero exit
+code on $\geq 4$ consecutive ticks; (iii) the worker has not committed
+in $\geq 12$ hours; (iv) the manager itself has failed to complete a
+tick on $\geq 3$ consecutive scheduler kicks. Alerts are deduplicated by
+key within a four-hour window to prevent notification floods. The
+failure mode addressed is silent failure of long-horizon loops, which is
+a category that is qualitatively absent from prior autoresearch
+evaluations because they are conducted as one-shot benchmark runs
+rather than as multi-day deployments.
+
+\paragraph{What the four mechanisms are not.}
+Each mechanism is targeted at a specific failure mode rather than at
+``general quality''. None of them, individually or together, prevents
+the worker from writing prose that is technically correct but
+uninteresting, from missing a relevant citation that no Semantic Scholar
+keyword would surface, or from producing an experimental design that an
+expert reviewer would find under-powered. We are explicit in
+\S\ref{sec:limitations} about the gaps these four mechanisms do not
+close.

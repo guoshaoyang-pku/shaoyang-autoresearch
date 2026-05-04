@@ -1,0 +1,43 @@
+% Section 6 -- Discussion and Limitations. Pages target ~0.6.
+% Required by venue: explicit Limitations subsection.
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\subsection{When this framework is the wrong choice}
+\label{sec:discussion-wrong-choice}
+
+\texttt{cursor\_manager} is designed for a specific regime: revising
+and shipping multi-page conference papers under hard discipline, with
+a human in the loop for strategic decisions. Four regimes are wrong
+choices. \textbf{(W1) From-scratch authoring.} The writing-only scope
+provides no value when there is no v1 draft; the paper must come from
+an end-to-end system such as \citet{song2026paperorchestra} or
+\citet{sibyl2026system}. \textbf{(W2) Experiment iteration.} We have
+no experiment-runner sub-agent and explicitly delegate GPU scheduling
+to the human; for that regime use \citet{sibyl2026system} or
+\citet{karpathy2026autoresearch}. \textbf{(W3) Throughput at
+borderline-reject quality.} The right tool for FARS-style 100-paper
+deployments at mean score 5.05 \citep{fars2026analemma} is FARS, not
+us; our per-commit discipline overhead is sensible only when the goal
+is a single paper at $\geq 6$ on a primary track. \textbf{(W4)
+Fully-autonomous operation.} The \texttt{[BLOCKED-DECISION]} protocol
+is unusable by construction; removing the halt would defeat it. We
+argue in \S\ref{sec:limitations} that fully-autonomous operation is
+in any case incompatible with current primary-track submission
+requirements, so this case is largely hypothetical.
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+We list four scope limitations and refer the reader to
+Appendix~\ref{app:limitations} for the full six. \textbf{(L1)}
+\texttt{cursor\_manager} edits text but cannot author or update
+figures (PaperOrchestra's Plot agent \citep{song2026paperorchestra}
+is a natural complement). \textbf{(L2)} The system reads experiment
+results computed elsewhere but does not allocate GPUs or schedule
+jobs (Sibyl \citep{sibyl2026system} does). \textbf{(L3)} The
+cross-model ablation in \S\ref{sec:case-ablation} uses single-digit
+injected violations per condition and is not statistically powered
+for fine distinctions. \textbf{(L4)} A single dogfood deployment,
+however carefully audited, does not settle whether the discipline
+mechanisms transfer to other groups, paper styles, or LLM backends.

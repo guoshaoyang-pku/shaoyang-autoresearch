@@ -1,0 +1,31 @@
+{
+  "cursor_api_key": "crsr_REPLACE_ME",
+  "openai_api_key": "sk-REPLACE_ME",
+  "anthropic_api_key": "sk-ant-REPLACE_ME",
+  "semantic_scholar_api_key": "",
+  "codex_proxy": {
+    "listen_host": "127.0.0.1",
+    "listen_port": 4002,
+    "upstream_base_url": "https://your-upstream.example/v1/chat/deployments/your-deployment",
+    "bearer_token": "REPLACE_WITH_UPSTREAM_API_KEY",
+    "fallback_models": [
+      "gpt-5.5-2026-04-24",
+      "gpt-5.4-2026-03-05",
+      "gpt-5.3-codex-2026-02-24"
+    ],
+    "default_model": "gpt-5.5-2026-04-24",
+    "model_aliases": {
+      "gpt-5.5": "gpt-5.5-2026-04-24",
+      "gpt-5.4": "gpt-5.4-2026-03-05",
+      "gpt-5.3": "gpt-5.3-codex-2026-02-24"
+    }
+  },
+  "lark_notification": {
+    "webhook_url": null,
+    "enabled": false
+  },
+  "github": {
+    "user": "REPLACE_ME",
+    "default_repo": "guoshaoyang-pku/shaoyang-autoresearch"
+  }
+}

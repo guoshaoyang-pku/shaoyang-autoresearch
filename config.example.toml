@@ -1,0 +1,119 @@
+# Cursor Manager 配置（复制为 config.toml 并按机器修改）。
+# Python 3.11+ 标准库 tomllib 直接读，无需安装依赖。
+#
+# Codex-only：所有 in-loop LLM（manager / worker / reviewer-sim）
+# 走 codex CLI；cursor-agent 已彻底从 in-loop 中移除，远程 GPU
+# 跑不了 cursor。Cursor IDE 仅作为人类操作员的入口。
+
+[reviewer]
+# Manager LLM 配置。tick.sh / kickoff.sh 都从这里读。
+# 唯一支持的 backend 是 "codex"；任何其它值会在 _invoke_manager.py
+# 启动时被立刻拒绝。
+backend = "codex"
+cli_path = "codex"
+profile = "high"                     # ~/.codex/config.toml 里的 [profiles.<profile>]
+timeout_seconds = 300                # 单次 tick 硬上限
+prompt_path = "prompts/reviewer.md"
+
+# 跨 API 模型对抗配置：让 manager / worker / reviewer-sim 各自走
+# 不同的 codex profile（profile 决定底层模型，e.g. claude-opus vs gpt-5.5）。
+# 如果三方都用同一个 profile，会出现 claim-bias —— 同一族模型互相
+# 放过对方的论证缺陷，参见 paper_meta §4.3。
+#
+# 推荐示例（在 ~/.codex/config.toml 里配好对应 profile）：
+#   manager      → profile = "manager_high"   (claude-opus-4-7-thinking-high)
+#   worker       → profile = "worker_high"    (gpt-5.5-2026-04-24-xhigh)
+#   reviewer-sim → profile = "reviewer_high"  (claude-opus-4-7-thinking-high)
+
+[worker]
+# 架构 Y：worker 跑本机 codex 子进程，每次 mgr start fork 一次，
+# 通过 codex exec resume <session-id> 跨 fork 持久化记忆。
+backend = "codex"
+cli_path = "codex"
+profile = "worker_high"              # 与 [reviewer].profile 不同 → cross-API-model
+# 远程机器上 shaoyang-autoresearch 本地 checkout 路径。
+local_repo_path = "/path/to/shaoyang-autoresearch"
+worktree_base = "paper/neurips2026-draft"
+worker_branch_prefix = "paper/neurips2026-draft-worker-"
+default_timeout_seconds = 1800
+
+[manager]
+poll_interval_seconds = 300          # 5 分钟检查一次
+max_run_seconds = 1800               # 单个 run 最长 30 分钟
+max_consecutive_restarts = 2         # 连续 cancel_restart 上限，超则 escalate
+log_path = "state/log.jsonl"
+escalations_path = "state/escalations.jsonl"
+notify_macos = true
+
+# dry_run: 只验证配置与状态；live: 允许 manager fork 本机 codex worker。
+mode = "dry_run"
+
+# === Autoresearch sub-agents (v2 2026-05+) ===
+# 详见 docs/sub_agents_contract.md + docs/autoresearch_landscape_2026_05.md
+
+[reviewer_sim]
+# NeurIPS reviewer-sim sub-agent（mgr review-sim）。
+# 唯一支持的 backend：codex（profile 与 [worker].profile 不同 →
+# 跨 API 模型对抗），或 stub（offline test）。
+backend = "codex"                    # "codex" | "stub"
+cli_path = "codex"
+profile = "reviewer_high"            # 必须 ≠ [worker].profile
+prompt_path = "prompts/reviewer_sim_neurips.md"
+timeout_seconds = 600
+
+[lit_review]
+# Semantic Scholar lit-review sub-agent（mgr lit-review）。
+backend = "live"                     # "live" | "stub"
+# 留空 = 用 free tier 1 RPS（够用）；填了用 100 RPS
+# （需申请 https://www.semanticscholar.org/product/api）。
+# 也可在仓库根目录 keys.json 里填 semantic_scholar_api_key（见 keys.example.json）。
+semantic_scholar_api_key = ""
+rate_limit_rps = 1.0
+default_bib_path = "ca_project/paper_neurips2026/references.bib"
+default_keywords = ["in-context learning", "physics inductive bias", "neural scaling law"]
+
+[sentinel]
+# Watchdog sub-agent（mgr sentinel-tick / 也可 cron 直接调 python sentinel.py）。
+recipient_path = "state/sentinel/recipient.json"
+# {"kind": "user_id" | "chat_id" | "open_id" | "email", "value": "..."}
+silence_hours_threshold = 12         # 无 commit 超过 N 小时报警
+dedupe_hours = 4                     # 同 alert_key 在 N 小时内只发一次
+lark_cli_path = "lark-cli"
+lark_identity = "user"               # "user" | "bot"
+
+# === Worker 定义 ===
+[[workers]]
+id = "paper_a"
+label = "CA / Physics ICL NeurIPS 2026 paper"
+enabled = true
+initial_prompt_path = "prompts/worker_paper_a.md"
+rules_paths = [
+  "rules/shared.md",
+  "rules/paper_a.md",
+]
+subdir = "ca_project/paper_neurips2026"
+
+[[workers]]
+id = "paper_b"
+label = "Scaling-law geometry paper (disabled by default)"
+enabled = false
+initial_prompt_path = "prompts/worker_paper_b.md"
+rules_paths = [
+  "rules/shared.md",
+  "rules/paper_b.md",
+]
+subdir = "scaling law toy/paper_neurips2026"
+
+[[workers]]
+# Dogfood meta-paper: cursor_manager 系统自身的 system paper。
+# Disabled by default — 远程 enable 时手动改 enabled = true。
+# 详见 docs/autoresearch_landscape_2026_05.md + paper_meta/OUTLINE.md。
+id = "paper_c"
+label = "cursor_manager system paper (dogfood meta-evaluation)"
+enabled = false
+initial_prompt_path = "prompts/worker_paper_c.md"
+rules_paths = [
+  "rules/shared.md",
+  "rules/paper_c.md",
+]
+subdir = "paper_meta"

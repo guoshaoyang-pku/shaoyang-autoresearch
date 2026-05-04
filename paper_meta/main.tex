@@ -1,0 +1,60 @@
+% cursor_manager system paper (meta-evaluation, dogfood test)
+% Working title; final title TBD by humans after v1 draft.
+%
+% Worker rules: see ../rules/paper_c.md
+% Persona: see ../prompts/worker_paper_c.md
+% Outline: see OUTLINE.md (drives section ordering and claim list)
+%
+% Build:
+%   pdflatex main && bibtex main && pdflatex main && pdflatex main
+% Must produce 0 warning before commit (see rules/paper_c.md HR-3).
+
+\documentclass{article}
+
+% Use [preprint] during drafting; switch to [final] for camera-ready.
+\usepackage[preprint]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{natbib}
+\usepackage{amsmath}
+
+\title{Turning Tokens into Research:\\
+  An Adversarial Multi-Agent Framework for Submission-Grade Paper Writing
+  under Unbounded Token Budgets}
+
+\author{%
+  (anonymized for review)
+}
+
+\begin{document}
+\maketitle
+
+\input{sections/00_abstract}
+\input{sections/01_introduction}
+\input{sections/02_related}
+\input{sections/03_architecture}
+\input{sections/04_discipline}
+\input{sections/05_case_study}
+\input{sections/06_discussion}
+\input{sections/07_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\input{sections/appendix}
+
+\input{sections/checklist}
+
+\end{document}

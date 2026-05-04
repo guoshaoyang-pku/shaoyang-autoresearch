@@ -1,0 +1,98 @@
+% Section 2 -- Related Work. Pages target ~1.0.
+% Must cite: PaperOrchestra, Sibyl, AI Scientist v2, Karpathy autoresearch,
+%            Agent Laboratory.
+\section{Related Work}
+\label{sec:related}
+
+We position \texttt{cursor\_manager} along two axes: \emph{scope} (does
+the system attempt end-to-end autoresearch, or only writing?) and
+\emph{evaluation target} (does the system optimize for a benchmark
+scoreboard, or for a real-conference submission?). To our knowledge no
+prior published system occupies the ``writing-only \(\times\)
+submission target'' quadrant in which we operate.
+
+\paragraph{End-to-end autoresearch frameworks.}
+\citet{lu2024aiscientist} introduced the AI Scientist as a
+single-process pipeline that ideates, implements experiments, and writes
+the resulting paper, evaluated on three machine-learning subfields with
+held-out reviewer LLMs as the scoring oracle. The successor system
+\citet{yamada2025aiscientistv2} introduces an agentic tree-search
+exploration step and is the first end-to-end framework to obtain a
+peer-reviewed acceptance: one of three submitted papers was accepted at
+the ICLR 2025 ``I Can't Believe It's Not Better'' workshop after a
+standard review process.\footnote{The remaining two submissions of
+\citet{yamada2025aiscientistv2} were not accepted; the authors report
+that the workshop was made aware of the AI authorship in advance, which
+is a venue-cooperation pattern that we do not assume in the
+\texttt{cursor\_manager} deployment.} \citet{schmidgall2025agentlaboratory}
+present Agent Laboratory, a three-stage pipeline (literature review,
+experimentation, report writing) optimized for cost reduction rather
+than acceptance. \citet{tang2025airesearcher} extend the line with
+end-to-end innovation evaluation.
+\citet{karpathy2026autoresearch} releases a single-GPU framework
+focused on iterating against the \texttt{nanochat} training pipeline.
+\citet{sibyl2026system} implements a 19-stage pipeline on Claude Code
+with $\geq$~20 specialized agents and a self-evolution loop, drawing
+explicit inspiration from FARS, the AI Scientist line, and
+\citet{karpathy2026autoresearch}.
+
+\paragraph{The throughput axis: FARS.}
+The closest published deployment in optimization target, and the
+most important contrast for our positioning, is
+\citet{fars2026analemma}. FARS is the first publicly demonstrated
+industrial-scale autoresearch system: in a February 2026 livestreamed
+deployment it produced 100 short papers in 228 hours of unattended
+operation on a 160-GPU cluster, consuming 11.4 billion tokens at
+roughly 104 thousand US dollars. The FARS-100 papers scored a mean
+of 5.05 on the Stanford Agentic Reviewer calibrated to ICLR scoring,
+which is 0.84 above the ICLR 2026 human submission mean of 4.21 and
+0.34 below the ICLR 2026 acceptance threshold of 5.39 (the mean over
+5340 of 19814 accepted submissions). FARS is a deliberate
+scale-throughput design: short single-contribution papers explicitly
+including negative results, with no commitment to crossing any
+specific venue's acceptance threshold. cursor\_manager occupies the
+orthogonal axis: rather than maximizing throughput at
+borderline-reject quality, we ask what discipline mechanisms move a
+single in-progress paper from the 5.05 band into the accept-decision
+band of a top-tier venue's primary track. The two are complementary;
+a FARS draft could in principle be routed through a
+cursor\_manager-style discipline layer, but we do not evaluate that
+composition.
+
+\paragraph{Manuscript-writing-specialized agents.}
+\citet{song2026paperorchestra} present PaperOrchestra, the closest
+prior work in scope: five specialized agents (Outline, Plot, Literature
+Review, Section Writing, Content Refinement) compose a writing-only
+pipeline evaluated on PaperWritingBench, a benchmark of 200
+reverse-engineered CVPR / ICLR 2025 papers. The PaperOrchestra
+literature-review agent inspires the design of our
+\texttt{lit\_review} sub-agent
+(\S\ref{sec:discipline-rules}).
+PaperOrchestra's evaluation, however, scores against the held-out
+ground-truth reverse-engineered paper and does not include any
+real-submission deployment, leaving open whether the benchmark-grade
+pipeline transfers to genuine submission constraints. The recent
+benchmark of \citet{miyai2026paperreconstruction} extends this
+benchmark-only paradigm with an explicit hallucination-detection
+component but again does not include real-submission deployments.
+
+\paragraph{Discipline mechanisms in agent systems.}
+The discipline mechanisms we introduce in \S\ref{sec:discipline} have
+partial precedents in prior systems but none combines them in the
+form we deploy. \citet{sibyl2026system} use a multi-agent debate
+quality gate, which is a confidence-aggregation pattern rather than a
+hard-rule pattern; debate can in principle be voted-down by the same
+reward-hacking dynamic it is meant to check.
+\citet{yamada2025aiscientistv2} use agentic tree search to backtrack
+when an experiment fails, which is closer to our Sentinel watchdog in
+spirit but operates inside the experimentation stage rather than as a
+deployment-level monitor. PaperOrchestra's content-refinement loop is
+quality-improving rather than claim-protective: it can rewrite text to
+be smoother but does not enforce that the rewrite preserves the
+original claim. The
+\texttt{[BLOCKED-DECISION]} escalation protocol of
+\S\ref{sec:discipline-blocked}, the cross-model adversarial
+configuration of \S\ref{sec:discipline-crossmodel}, and the explicit
+silent-failure monitor of \S\ref{sec:discipline-sentinel} are, to our
+knowledge, novel in the autoresearch literature, and we ablate each
+in \S\ref{sec:case}.

@@ -1,0 +1,44 @@
+% Abstract -- locked last. Hook C1 + preview C4 + headline number from C5.
+\begin{abstract}
+Frontier inference budgets have effectively dissolved the token
+constraint on autoresearch, yet -- to our knowledge as of May 2026,
+and notwithstanding the largest publicly demonstrated deployment,
+FARS \citep{fars2026analemma}, which produced 100 short papers in
+228 hours of unattended operation at a mean Stanford Agentic
+Reviewer score of 5.05 on the ICLR scale (range 3.0--6.3, against
+a mean of 5.39 across accepted ICLR 2026 submissions) -- no
+autonomous-paper-writing system with openly disclosed AI authorship
+has, to date, been accepted for publication on the primary track of
+a top-tier ML/AI venue. We argue the binding constraint has shifted from
+\emph{scale} to \emph{discipline}: claim drift, citation
+hallucination, reward hacking on the LLM judge, and silent failure of
+long-horizon agentic loops. We present \texttt{cursor\_manager}, an
+adversarial multi-agent framework whose four discipline mechanisms --
+hard-rule enforcement with claim-protected zones, a
+\texttt{[BLOCKED-DECISION]} escalation protocol, cross-API-model
+adversarial review (operationalised in a codex-only loop by giving
+the worker and the reviewer-sim sub-agent different codex profiles
+that map to different underlying API models), and a Sentinel
+watchdog with out-of-band notification -- target one failure mode
+each. The framework's
+operational core is a one-manager / one-worker loop with
+contract-mediated sub-agents; we contribute a sub-agent contract
+pattern that compressed the implementation of the four discipline
+modules from a 3--4 work-day estimate to under thirty minutes of
+parallel LLM-driven shipping, with \(13/13\) hermetic self-tests
+passing and one regression bug surfaced before deployment. We
+dogfood the system on this NeurIPS 2026 submission itself --
+drafted under the cursor\_manager hard-rule discipline and using the
+lit-review sub-agent for bibliography verification, with two
+additional papers in concurrent development under the full
+manager-worker tick loop -- and all reported numbers in the paper are
+queried from immutable audit logs released alongside the system. We argue
+that real-submission dogfood of this kind is the missing evaluation
+in the autoresearch literature: discipline mechanisms validated only
+on benchmarks may not transfer, and discipline mechanisms validated
+on a real submission may not generalize, but only the latter
+evaluation can falsify the discipline-versus-scale claim. The
+complete system, this paper's source, and this paper's full commit
+history are released under MIT license to enable exact reproduction
+of every entry in our audit logs.
+\end{abstract}

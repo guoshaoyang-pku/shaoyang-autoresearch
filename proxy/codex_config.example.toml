@@ -1,0 +1,33 @@
+# Example Codex CLI configuration (copy to ~/.codex/config.toml).
+# Point model_providers.*.base_url at your local proxy, e.g. http://127.0.0.1:4002
+# Set api_key to a non-empty placeholder; the proxy injects real upstream auth from keys.json / env.
+
+model = "gpt-5.5-2026-04-24"
+model_provider = "custom_proxy"
+model_reasoning_effort = "high"
+
+[model_providers.custom_proxy]
+name = "Local codex proxy"
+base_url = "http://127.0.0.1:4002"
+api_key = "local-proxy-placeholder"
+wire_api = "responses"
+
+[profiles.high]
+model = "gpt-5.5-2026-04-24"
+model_provider = "custom_proxy"
+reasoning_effort = "xhigh"
+
+[profiles.worker_high]
+model = "gpt-5.5-2026-04-24"
+model_provider = "custom_proxy"
+reasoning_effort = "xhigh"
+
+[profiles.reviewer_high]
+model = "claude-opus-4-7-thinking-high"
+model_provider = "custom_proxy"
+reasoning_effort = "high"
+
+[profiles.manager_high]
+model = "claude-opus-4-7-thinking-high"
+model_provider = "custom_proxy"
+reasoning_effort = "high"

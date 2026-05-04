@@ -1,0 +1,20 @@
+# LaTeX build artifacts (regenerable; main.pdf intentionally NOT ignored
+# so reviewers and dogfood readers can download the rendered paper without
+# a TeX install).
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.idx
+*.ind
+*.ilg
+*.nav
+*.snm
+*.vrb

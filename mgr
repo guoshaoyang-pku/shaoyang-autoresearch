@@ -1,0 +1,789 @@
+#!/usr/bin/env python3
+"""
+manager-cli (mgr): codex-only atomic operations for the manager LLM (architecture Y).
+
+设计原则：
+  - 每个命令输出 well-formatted text 或 JSON，方便 LLM 读
+  - 错误信息明确（"no_active_run" / "worktree_missing" / 等）
+  - 不暴露 API key、不做策略判断（策略由 Manager LLM 决定）
+  - 后端唯一：codex CLI。cursor-agent 已彻底从 in-loop 中移除。
+
+子命令（核心）：
+  mgr workers                     列出所有 worker
+  mgr status <worker>             worker 当前 run 状态 + 上下文
+  mgr commits <worker> [-n N]     worker branch 的最近 N 条 commit
+  mgr diff <worker>               worker branch 相对 base 的 git diff
+  mgr output <worker> [--max N]   worker 当前 / 最近一次 run 的 stdout 末尾
+  mgr start <worker> -p "<prompt>"  fork 一个新 codex exec run
+  mgr cancel <worker> [-r reason]   杀当前 active run（process group）
+  mgr escalate <worker> -r "<reason>"  写 escalations.jsonl + macOS 通知
+  mgr rules <worker>              打印 worker 的 hard rules
+  mgr log -n N [--worker W]       看 mgr 命令的事件流
+  mgr escalations                 看待人决策的 escalation
+  mgr audit <worker>              看某 worker 的 manager tick audit log
+  mgr mark-processed <worker> --run-id ID --verdict V --summary S   决策完调，更新 state
+
+子命令（autoresearch sub-agents, v2 2026-05+）：
+  mgr review-sim <worker>         NeurIPS reviewer-sim 跑一遍 worker 当前 diff
+                                  （独立 codex --profile，跨 API 模型对抗）
+  mgr lit-review <worker>         Semantic Scholar 验证 .bib + 推荐 must-cite
+  mgr sentinel-tick               跑 sentinel watchdog 一次（cron 触发）
+  mgr backend-test <worker>       烟测 codex CLI 健康
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).parent.resolve()
+sys.path.insert(0, str(ROOT))
+
+from lib.codex_worker import CodexWorker
+from lib.state import AgentRegistry, JsonlLog, expand
+
+
+CONFIG_PATH = ROOT / "config.toml"
+
+
+def _make_codex_worker(cfg: dict, worker_id: str) -> CodexWorker:
+    """Construct a CodexWorker for ``worker_id`` from config.
+
+    ``[worker].backend`` defaults to "codex"; any other value is rejected
+    early to make the codex-only invariant a hard guarantee at load time.
+    """
+    worker_cfg = cfg.get("worker", {}) or {}
+    backend = (worker_cfg.get("backend") or "codex").strip().lower()
+    if backend != "codex":
+        sys.exit(
+            f"[worker].backend = {backend!r} 不再支持；只剩 codex"
+            f"（cursor-agent 已彻底从 in-loop 中移除）"
+        )
+    return CodexWorker(
+        worker_id=worker_id,
+        cli_path=worker_cfg.get("cli_path", "codex"),
+        profile=worker_cfg.get("profile", "high"),
+    )
+
+
+def _resolve_tool_path(raw: str | Path) -> Path:
+    p = expand(raw)
+    return p if p.is_absolute() else (ROOT / p)
+
+
+def _load_cfg() -> dict:
+    if not CONFIG_PATH.exists():
+        sys.exit(f"找不到 {CONFIG_PATH}（先 cp config.example.toml config.toml）")
+    with open(CONFIG_PATH, "rb") as f:
+        return tomllib.load(f)
+
+
+def _find_worker(cfg: dict, worker_id: str) -> dict:
+    for w in cfg["workers"]:
+        if w["id"] == worker_id:
+            return w
+    sys.exit(f"未知 worker: {worker_id}（可用: {[w['id'] for w in cfg['workers']]}）")
+
+
+def _make_worker(cfg: dict, worker_id: str) -> CodexWorker:
+    """Create a CodexWorker (codex is the only supported backend)."""
+    return _make_codex_worker(cfg, worker_id)
+
+
+def _registry() -> AgentRegistry:
+    """旧 registry，保留 last_processed_run_id / last_seen_commit / consecutive_restarts。"""
+    return AgentRegistry(ROOT / "state" / "agents.json")
+
+
+def _log() -> JsonlLog:
+    cfg = _load_cfg()
+    return JsonlLog(_resolve_tool_path(cfg["manager"]["log_path"]))
+
+
+def _escalations() -> JsonlLog:
+    cfg = _load_cfg()
+    return JsonlLog(_resolve_tool_path(cfg["manager"]["escalations_path"]))
+
+
+def _macos_notify(title: str, msg: str):
+    try:
+        subprocess.run(
+            ["osascript", "-e", f'display notification "{msg}" with title "{title}"'],
+            check=False,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def _git(*args, cwd, check: bool = True) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if check and proc.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} (cwd={cwd}) failed:\n{proc.stderr.strip()}")
+    return proc.stdout
+
+
+# ---------- 命令实现 ----------
+
+def cmd_workers(args):
+    cfg = _load_cfg()
+    print(f"{'worker_id':<12} {'enabled':<8} {'worktree_path'}")
+    print("-" * 90)
+    for w in cfg["workers"]:
+        lw = _make_worker(cfg, w["id"])
+        wt = lw.worktree_path or "(未 bootstrap)"
+        print(f"{w['id']:<12} {str(w.get('enabled', True)):<8} {wt}")
+        print(f"             label: {w['label']}")
+        if lw.branch:
+            print(f"             branch: {lw.branch}")
+        if lw.session_id:
+            print(f"             codex_session_id: {lw.session_id}")
+
+
+def cmd_status(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    entry = _registry().get(args.worker) or {}
+
+    out: dict = lw.to_dict()
+    out["label"] = worker["label"]
+    out["last_processed_run_id"] = entry.get("last_processed_run_id")
+    out["last_seen_commit"] = entry.get("last_seen_commit")
+    out["consecutive_restarts"] = entry.get("consecutive_restarts", 0)
+    out["last_review"] = entry.get("last_review")
+
+    # 加 git 状态（worker 在不在写东西）
+    if lw.worktree_path and Path(lw.worktree_path).exists():
+        try:
+            head = _git("rev-parse", "HEAD", cwd=lw.worktree_path).strip()
+            status = _git("status", "--porcelain", cwd=lw.worktree_path).strip()
+            out["worktree_head"] = head
+            out["worktree_dirty"] = bool(status)
+            out["worktree_status_lines"] = status.splitlines()[:20]
+        except Exception as e:
+            out["git_error"] = str(e)
+    else:
+        out["worktree_missing"] = True
+
+    print(json.dumps(out, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def cmd_commits(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    if not lw.worktree_path:
+        print(json.dumps({"error": "worktree_missing", "hint": "先 ./bootstrap.sh"}))
+        return 1
+
+    base = cfg["worker"].get("worktree_base", "paper/neurips2026-draft")
+    last = None if args.all else (_registry().get(args.worker) or {}).get("last_seen_commit")
+
+    try:
+        if last:
+            range_spec = f"{last}..HEAD"
+        else:
+            range_spec = f"{base}..HEAD"
+
+        raw = _git(
+            "log", "--reverse", "-n", str(args.n),
+            "--pretty=format:%H%x1f%an%x1f%ai%x1f%s%x1f%b%x1e",
+            range_spec,
+            cwd=lw.worktree_path, check=False,
+        )
+        commits = []
+        for chunk in raw.split("\x1e"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            parts = chunk.split("\x1f")
+            if len(parts) < 5:
+                parts += [""] * (5 - len(parts))
+            commits.append({
+                "hash": parts[0],
+                "author": parts[1],
+                "ai_date": parts[2],
+                "subject": parts[3],
+                "body": parts[4].strip(),
+            })
+
+        head = _git("rev-parse", "HEAD", cwd=lw.worktree_path).strip()
+        out = {
+            "worker_id": args.worker,
+            "branch": lw.branch,
+            "base": base,
+            "since": last or f"(diverged from {base})",
+            "head": head,
+            "commits": commits,
+        }
+    except Exception as e:
+        out = {"worker_id": args.worker, "error": "git_failed", "detail": str(e)}
+
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_diff(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    if not lw.worktree_path:
+        print(json.dumps({"error": "worktree_missing"}))
+        return 1
+    base = cfg["worker"].get("worktree_base", "paper/neurips2026-draft")
+    last = None if args.all else (_registry().get(args.worker) or {}).get("last_seen_commit")
+    base_ref = last or base
+
+    subdir = worker.get("subdir")
+    try:
+        stat_args = ["diff", "--stat", base_ref, "HEAD"]
+        if subdir:
+            stat_args += ["--", subdir]
+        stat = _git(*stat_args, cwd=lw.worktree_path, check=False)
+
+        diff_args = ["diff", base_ref, "HEAD"]
+        if subdir:
+            diff_args += ["--", subdir]
+        full = _git(*diff_args, cwd=lw.worktree_path, check=False)
+
+        if len(full) > args.max_chars:
+            full = full[:args.max_chars] + f"\n\n[truncated {len(full) - args.max_chars} chars]"
+        print(f"=== diff stat ({base_ref}..HEAD) ===\n{stat}")
+        print(f"=== diff (truncated to {args.max_chars} chars) ===\n{full}")
+    except Exception as e:
+        print(json.dumps({"error": "git_failed", "detail": str(e)}))
+        return 1
+    return 0
+
+
+def cmd_output(args):
+    """读 worker 当前 / 最近一次 run 的 stdout 末尾。"""
+    cfg = _load_cfg()
+    lw = _make_worker(cfg, args.worker)
+    text = lw.read_output(max_chars=args.max_chars)
+    print(text)
+    return 0
+
+
+def cmd_start(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    if not lw.worktree_path:
+        print(json.dumps({"error": "worktree_missing", "hint": "先 ./bootstrap.sh"}))
+        return 1
+
+    timeout = args.timeout or cfg["worker"].get("default_timeout_seconds", 1800)
+
+    try:
+        info = lw.start(prompt=args.prompt, timeout_seconds=timeout)
+    except RuntimeError as e:
+        print(json.dumps({"error": "start_failed", "detail": str(e)}))
+        return 2
+
+    _log().append({
+        "event": "manager_start_run",
+        "worker_id": args.worker,
+        "run_id": info.id,
+        "pid": info.pid,
+        "prompt_preview": args.prompt[:300],
+    })
+    print(json.dumps({
+        "ok": True,
+        "run_id": info.id,
+        "pid": info.pid,
+        "started_at": info.started_at,
+        "output_path": info.output_path,
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_cancel(args):
+    cfg = _load_cfg()
+    lw = _make_worker(cfg, args.worker)
+    cur = lw.get_run()
+    if not cur or not cur.is_active:
+        print(json.dumps({"error": "no_active_run"}))
+        return 1
+    ok = lw.cancel()
+    _log().append({
+        "event": "manager_cancel_run",
+        "worker_id": args.worker,
+        "run_id": cur.id,
+        "pid": cur.pid,
+        "reason": args.reason or "(no reason)",
+    })
+    print(json.dumps({"ok": ok, "cancelled_run_id": cur.id, "cancelled_pid": cur.pid}, ensure_ascii=False))
+    return 0
+
+
+def cmd_escalate(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    _escalations().append({
+        "worker_id": args.worker,
+        "label": worker["label"],
+        "reason": args.reason,
+        "raised_by": "manager_llm",
+    })
+    _log().append({
+        "event": "manager_escalation",
+        "worker_id": args.worker,
+        "reason": args.reason,
+    })
+    if cfg["manager"].get("notify_macos", True):
+        _macos_notify(f"Cursor Manager: {args.worker} 需决策", args.reason[:200])
+    print(json.dumps({"ok": True, "escalated": args.worker, "reason": args.reason[:200]}, ensure_ascii=False))
+    return 0
+
+
+def cmd_rules(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    for p in worker["rules_paths"]:
+        path = _resolve_tool_path(p)
+        print(f"\n========== {path} ==========\n")
+        print(path.read_text())
+    return 0
+
+
+def cmd_log(args):
+    log = _log()
+    items = log.tail(args.n)
+    if args.worker:
+        items = [it for it in items if it.get("worker_id") == args.worker]
+    for it in items:
+        print(json.dumps(it, ensure_ascii=False))
+    return 0
+
+
+def cmd_escalations(args):
+    items = _escalations().tail(args.n)
+    if args.worker:
+        items = [it for it in items if it.get("worker_id") == args.worker]
+    if not items:
+        print("（无 escalation）")
+        return 0
+    for it in items:
+        print(f"[{it.get('iso','')}] {it.get('worker_id','?')}: {it.get('reason','')}")
+    return 0
+
+
+def cmd_audit(args):
+    audit_path = ROOT / "state" / "manager_audits" / f"{args.worker}.jsonl"
+    if not audit_path.exists():
+        print(f"无 audit 文件: {audit_path}")
+        return 1
+    lines = audit_path.read_text().splitlines()[-args.n:]
+    for line in lines:
+        try:
+            d = json.loads(line)
+            print(f"[{d.get('tick_at','')}] {d.get('action','?'):<14} {d.get('summary','')}")
+        except Exception:
+            print(line)
+    return 0
+
+
+def _read_diff_for_worker(cfg: dict, worker_id: str, base_ref: str | None = None, max_chars: int = 16000) -> tuple[str, list[dict], str]:
+    """Helper: returns (full_diff, commits_list, head_sha) for the worker.
+
+    Used by review-sim. Mirrors cmd_diff + cmd_commits but in-process, not stdout.
+    """
+    worker = _find_worker(cfg, worker_id)
+    lw = _make_worker(cfg, worker_id)
+    if not lw.worktree_path:
+        raise RuntimeError("worktree_missing; run ./bootstrap.sh first")
+
+    base = base_ref or cfg["worker"].get("worktree_base", "paper/neurips2026-draft")
+    subdir = worker.get("subdir")
+    head = _git("rev-parse", "HEAD", cwd=lw.worktree_path).strip()
+
+    diff_args = ["diff", base, "HEAD"]
+    if subdir:
+        diff_args += ["--", subdir]
+    full = _git(*diff_args, cwd=lw.worktree_path, check=False)
+    if len(full) > max_chars:
+        full = full[:max_chars] + f"\n\n[truncated {len(full) - max_chars} chars]"
+
+    raw = _git(
+        "log", "--reverse", "-n", "20",
+        "--pretty=format:%H%x1f%an%x1f%ai%x1f%s%x1f%b%x1e",
+        f"{base}..HEAD",
+        cwd=lw.worktree_path, check=False,
+    )
+    commits = []
+    for chunk in raw.split("\x1e"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        parts = chunk.split("\x1f")
+        if len(parts) < 5:
+            parts += [""] * (5 - len(parts))
+        commits.append({"hash": parts[0], "author": parts[1], "ai_date": parts[2], "subject": parts[3], "body": parts[4].strip()})
+
+    return full, commits, head
+
+
+def cmd_review_sim(args):
+    """Run NeurIPS reviewer-sim on the worker's current diff vs base.
+
+    Writes ``state/reviewer_sim/<worker>/<run_id>.md`` and prints the path.
+    """
+    cfg = _load_cfg()
+    rs_cfg = cfg.get("reviewer_sim") or {}
+    if not rs_cfg:
+        print(json.dumps({"error": "reviewer_sim_not_configured", "hint": "add [reviewer_sim] section to config.toml"}))
+        return 1
+
+    try:
+        full_diff, commits, head = _read_diff_for_worker(cfg, args.worker, base_ref=args.against)
+    except RuntimeError as e:
+        print(json.dumps({"error": str(e)}))
+        return 1
+
+    if not full_diff.strip():
+        print(json.dumps({"warn": "empty_diff", "head": head, "base": args.against or cfg["worker"].get("worktree_base")}))
+        return 0
+
+    from lib.reviewer_sim import ReviewerSim, StubReviewerSim
+
+    backend = (rs_cfg.get("backend") or "codex").strip().lower()
+    if backend not in {"codex", "stub"}:
+        print(json.dumps({
+            "error": "unsupported_backend",
+            "backend": backend,
+            "hint": "[reviewer_sim].backend must be 'codex' or 'stub' (cursor-agent removed)",
+        }))
+        return 1
+
+    if backend == "stub":
+        sim = StubReviewerSim()
+        backend_label = "stub"
+    else:
+        sim = ReviewerSim(
+            cli_path=rs_cfg.get("cli_path", "codex"),
+            profile=rs_cfg.get("profile", "reviewer_high"),
+            prompt_path=_resolve_tool_path(rs_cfg.get("prompt_path", "prompts/reviewer_sim_neurips.md")),
+            timeout_seconds=int(rs_cfg.get("timeout_seconds", 600)),
+        )
+        backend_label = f"codex/{rs_cfg.get('profile','reviewer_high')}"
+
+    worker = _find_worker(cfg, args.worker)
+    extra_context = {"hard_rules_paths": worker.get("rules_paths", []), "section_focus": args.focus} if args.focus else None
+    report = sim.review(
+        worker_label=worker["label"],
+        target_diff=full_diff,
+        target_commits=commits,
+        worker_run_output="",
+        extra_context=extra_context,
+    )
+
+    run_id = f"{int(time.time())}-{head[:8]}"
+    out_dir = ROOT / "state" / "reviewer_sim" / args.worker
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{run_id}.md"
+    md = (
+        f"# NeurIPS Reviewer Sim — {args.worker} {run_id}\n\n"
+        + report.to_markdown()
+        + f"\n\n## Provenance\n- diff: {args.against or cfg['worker'].get('worktree_base')}..{head}\n"
+        + f"- commits: {len(commits)}\n- backend: {backend_label}\n"
+    )
+    out_path.write_text(md, encoding="utf-8")
+
+    _log().append({
+        "event": "manager_review_sim",
+        "worker_id": args.worker,
+        "head": head,
+        "overall_score": report.overall_score,
+        "n_concerns": len(report.concerns),
+        "report_path": str(out_path),
+    })
+
+    print(json.dumps({
+        "ok": True,
+        "report_path": str(out_path),
+        "overall_score": report.overall_score,
+        "confidence": report.confidence,
+        "n_strengths": len(report.strengths),
+        "n_concerns": len(report.concerns),
+        "n_requested_changes": len(report.requested_changes),
+        "summary": report.summary,
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_lit_review(args):
+    """Verify worker's .bib against Semantic Scholar + suggest must-cites.
+
+    Writes ``state/lit_review/<worker>/<run_id>.json`` plus .md summary.
+    """
+    cfg = _load_cfg()
+    lr_cfg = cfg.get("lit_review") or {}
+
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    if not lw.worktree_path:
+        print(json.dumps({"error": "worktree_missing"}))
+        return 1
+
+    bib_path = args.bib or lr_cfg.get("default_bib_path")
+    if not bib_path:
+        print(json.dumps({"error": "bib_path_required", "hint": "pass --bib path/to/refs.bib or set [lit_review].default_bib_path in config.toml"}))
+        return 1
+    bib_full = Path(lw.worktree_path) / bib_path if not Path(bib_path).is_absolute() else Path(bib_path)
+    if not bib_full.exists():
+        print(json.dumps({"error": "bib_not_found", "tried": str(bib_full)}))
+        return 1
+
+    keywords = []
+    if args.keywords:
+        keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
+    elif lr_cfg.get("default_keywords"):
+        keywords = list(lr_cfg["default_keywords"])
+
+    from lib.lit_review import LitReview, StubLitReview, SemanticScholarClient
+    from lib.secrets import get_semantic_scholar_api_key, load_keys
+
+    if args.stub or lr_cfg.get("backend") == "stub":
+        rev = StubLitReview()
+    else:
+        ss_key = lr_cfg.get("semantic_scholar_api_key") or None
+        if not ss_key:
+            ss_key = get_semantic_scholar_api_key(load_keys())
+        client = SemanticScholarClient(
+            api_key=ss_key,
+            rate_limit_rps=float(lr_cfg.get("rate_limit_rps", 1.0)),
+        )
+        rev = LitReview(client=client)
+
+    report = rev.run_full(bib_path=bib_full, keywords=keywords or None)
+
+    run_id = f"{int(time.time())}"
+    out_dir = ROOT / "state" / "lit_review" / args.worker
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / f"{run_id}.json"
+    md_path = out_dir / f"{run_id}.md"
+
+    json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    md_path.write_text(report.to_markdown_summary(), encoding="utf-8")
+
+    _log().append({
+        "event": "manager_lit_review",
+        "worker_id": args.worker,
+        "bib_path": str(bib_full),
+        "n_entries_total": report.n_entries_total,
+        "n_verified": report.n_verified,
+        "n_unverified": report.n_unverified,
+        "n_must_cite_suggestions": len(report.must_cite_suggestions),
+        "report_json": str(json_path),
+    })
+
+    print(json.dumps({
+        "ok": True,
+        "report_json": str(json_path),
+        "report_md": str(md_path),
+        "n_entries_total": report.n_entries_total,
+        "n_verified": report.n_verified,
+        "n_unverified": report.n_unverified,
+        "n_must_cite_suggestions": len(report.must_cite_suggestions),
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_sentinel_tick(args):
+    """Run sentinel watchdog one tick. Pass-through to sentinel.py."""
+    sentinel_py = ROOT / "sentinel.py"
+    cmd = [sys.executable, str(sentinel_py)]
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    try:
+        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        print(json.dumps({"error": "sentinel_timeout"}))
+        return 1
+
+    print(proc.stdout, end="")
+    if proc.stderr:
+        print("--- stderr ---\n" + proc.stderr, file=sys.stderr)
+
+    _log().append({
+        "event": "manager_sentinel_tick",
+        "exit_code": proc.returncode,
+        "dry_run": bool(args.dry_run),
+    })
+    return proc.returncode
+
+
+def cmd_backend_test(args):
+    """Smoke-test the codex CLI by running a trivial prompt and reading the output.
+
+    Does NOT use ``codex exec resume`` / persistent session. Just verifies
+    the CLI is reachable and roundtrips a single token. cursor-agent is no
+    longer a supported backend; ``[worker].backend`` must be ``codex``.
+    """
+    cfg = _load_cfg()
+    worker_cfg = cfg.get("worker", {}) or {}
+    backend = (worker_cfg.get("backend") or "codex").strip().lower()
+
+    if backend != "codex":
+        print(json.dumps({
+            "ok": False,
+            "error": "unsupported_backend",
+            "backend": backend,
+            "hint": "[worker].backend must be 'codex' (cursor-agent removed)",
+        }, ensure_ascii=False, indent=2))
+        return 2
+
+    cli_path = worker_cfg.get("cli_path", "codex")
+    profile = worker_cfg.get("profile", "high")
+    bash_cmd = (
+        f"{cli_path} exec --skip-git-repo-check --color never --profile {profile} "
+        f'"reply with the single word OK and nothing else" < /dev/null'
+    )
+    wrapper = ["/bin/bash", "-c", bash_cmd]
+    timeout = 90
+
+    try:
+        proc = subprocess.run(wrapper, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(json.dumps({"ok": False, "error": "timeout", "backend": backend, "timeout_seconds": timeout}))
+        return 1
+    except FileNotFoundError as e:
+        print(json.dumps({"ok": False, "error": "cli_not_found", "backend": backend, "detail": str(e)}))
+        return 2
+
+    has_ok = "OK" in (proc.stdout or "")
+    out_preview = (proc.stdout or "").strip()[-400:]
+
+    result = {
+        "ok": proc.returncode == 0 and has_ok,
+        "backend": backend,
+        "profile": profile,
+        "exit_code": proc.returncode,
+        "saw_OK_token": has_ok,
+        "output_preview": out_preview,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result["ok"] else 3
+
+
+def cmd_mark_processed(args):
+    cfg = _load_cfg()
+    worker = _find_worker(cfg, args.worker)
+    lw = _make_worker(cfg, args.worker)
+    reg = _registry()
+    entry = reg.get(args.worker) or {}
+
+    head = None
+    if lw.worktree_path:
+        try:
+            head = _git("rev-parse", "HEAD", cwd=lw.worktree_path).strip()
+        except Exception:
+            head = entry.get("last_seen_commit") or "unknown"
+
+    reg.update(
+        args.worker,
+        last_processed_run_id=args.run_id,
+        last_seen_commit=head or "unknown",
+        last_review={
+            "verdict": args.verdict,
+            "summary": args.summary or "",
+            "ts": time.time(),
+        },
+    )
+    if args.verdict == "continue":
+        reg.update(args.worker, consecutive_restarts=0)
+    elif args.verdict == "cancel_restart":
+        cur = (entry.get("consecutive_restarts") or 0) + 1
+        reg.update(args.worker, consecutive_restarts=cur)
+    print(json.dumps({"ok": True, "head": head, "verdict": args.verdict}, ensure_ascii=False))
+    return 0
+
+
+# ---------- argparse ----------
+
+def main():
+    ap = argparse.ArgumentParser(prog="mgr", description="manager-cli (architecture Y: local worker)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("workers"); s.set_defaults(func=cmd_workers)
+
+    s = sub.add_parser("status"); s.add_argument("worker"); s.set_defaults(func=cmd_status)
+
+    s = sub.add_parser("commits")
+    s.add_argument("worker"); s.add_argument("-n", type=int, default=10); s.add_argument("--all", action="store_true")
+    s.set_defaults(func=cmd_commits)
+
+    s = sub.add_parser("diff")
+    s.add_argument("worker"); s.add_argument("--max-chars", type=int, default=8000); s.add_argument("--all", action="store_true")
+    s.set_defaults(func=cmd_diff)
+
+    s = sub.add_parser("output", help="worker 当前/最近 run 的 stdout 末尾（替代 stream）")
+    s.add_argument("worker"); s.add_argument("--max-chars", type=int, default=8000)
+    s.set_defaults(func=cmd_output)
+
+    s = sub.add_parser("start"); s.add_argument("worker"); s.add_argument("-p", "--prompt", required=True)
+    s.add_argument("--timeout", type=int)
+    s.set_defaults(func=cmd_start)
+
+    s = sub.add_parser("cancel"); s.add_argument("worker"); s.add_argument("-r", "--reason"); s.set_defaults(func=cmd_cancel)
+
+    s = sub.add_parser("escalate"); s.add_argument("worker"); s.add_argument("-r", "--reason", required=True); s.set_defaults(func=cmd_escalate)
+
+    s = sub.add_parser("rules"); s.add_argument("worker"); s.set_defaults(func=cmd_rules)
+
+    s = sub.add_parser("log"); s.add_argument("-n", type=int, default=20); s.add_argument("--worker"); s.set_defaults(func=cmd_log)
+
+    s = sub.add_parser("escalations"); s.add_argument("-n", type=int, default=20); s.add_argument("--worker"); s.set_defaults(func=cmd_escalations)
+
+    s = sub.add_parser("audit"); s.add_argument("worker"); s.add_argument("-n", type=int, default=30); s.set_defaults(func=cmd_audit)
+
+    s = sub.add_parser("mark-processed")
+    s.add_argument("worker"); s.add_argument("--run-id", required=True)
+    s.add_argument("--verdict", required=True, choices=["continue", "cancel_restart", "escalate"])
+    s.add_argument("--summary")
+    s.set_defaults(func=cmd_mark_processed)
+
+    # --- autoresearch sub-agents (v2 2026-05+) ---
+    s = sub.add_parser("review-sim", help="run NeurIPS reviewer-sim on current diff (cross-model adversary)")
+    s.add_argument("worker")
+    s.add_argument("--against", default=None, help="git ref to diff against (default: [worker].worktree_base)")
+    s.add_argument("--focus", default=None, help="optional section focus hint passed as extra_context")
+    s.set_defaults(func=cmd_review_sim)
+
+    s = sub.add_parser("lit-review", help="verify .bib against Semantic Scholar + suggest must-cite")
+    s.add_argument("worker")
+    s.add_argument("--bib", default=None, help="path to .bib (relative to worktree); default = [lit_review].default_bib_path")
+    s.add_argument("--keywords", default=None, help="comma-separated keywords; default = [lit_review].default_keywords")
+    s.add_argument("--stub", action="store_true", help="use StubLitReview (offline, no API calls)")
+    s.set_defaults(func=cmd_lit_review)
+
+    s = sub.add_parser("sentinel-tick", help="run sentinel watchdog one tick (cron entry)")
+    s.add_argument("--dry-run", action="store_true", help="don't send Lark, just print what would")
+    s.set_defaults(func=cmd_sentinel_tick)
+
+    s = sub.add_parser("backend-test", help="smoke-test the codex CLI")
+    s.add_argument("worker", nargs="?", default=None, help="(optional) worker id, currently unused")
+    s.set_defaults(func=cmd_backend_test)
+
+    args = ap.parse_args()
+    sys.exit(args.func(args) or 0)
+
+
+if __name__ == "__main__":
+    main()
