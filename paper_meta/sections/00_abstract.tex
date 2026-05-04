@@ -31,14 +31,18 @@ dogfood the system on this NeurIPS 2026 submission itself --
 drafted under the cursor\_manager hard-rule discipline and using the
 lit-review sub-agent for bibliography verification, with two
 additional papers in concurrent development under the full
-manager-worker tick loop -- and all reported numbers in the paper are
-queried from immutable audit logs released alongside the system. We argue
+manager-worker tick loop -- and all reported integers are reproducible from
+the commands and artefact classes referenced in the paper (git / \texttt{wc} /
+verifier transcripts; default checkouts \texttt{gitignore} runtime JSONL ---
+see~\S\ref{sec:case}). We argue
 that real-submission dogfood of this kind is the missing evaluation
 in the autoresearch literature: discipline mechanisms validated only
 on benchmarks may not transfer, and discipline mechanisms validated
 on a real submission may not generalize, but only the latter
 evaluation can falsify the discipline-versus-scale claim. The
-complete system, this paper's source, and this paper's full commit
-history are released under MIT license to enable exact reproduction
-of every entry in our audit logs.
+complete system and this paper's source are released under the MIT
+license at a public GitHub repository (Appendix~\ref{app:repo}); the public mirror
+uses a squashed git history for readability while preserving byte-accurate
+sources, and line-level engineering provenance for cited fixes is
+recoverable from the authors' source-branch git history where noted in~\S\ref{sec:case}.
 \end{abstract}

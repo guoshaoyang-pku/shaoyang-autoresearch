@@ -38,7 +38,7 @@ try:
 except ImportError:
     from lib.state import expand
 
-USER_AGENT = "cursor_manager/lit_review (shaoyang-autoresearch autoresearch)"
+USER_AGENT = "cursor_manager/lit_review (LiuLab autoresearch)"
 DEFAULT_TIMEOUT_SEC = 10
 SS_BASE = "https://api.semanticscholar.org/graph/v1"
 

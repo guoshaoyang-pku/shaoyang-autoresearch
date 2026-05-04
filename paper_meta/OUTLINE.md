@@ -71,7 +71,7 @@ For each number reported in §5, the worker must include in the commit message a
 - ❌ Do NOT fabricate numbers in §5. If audit log is empty or sparse, add a placeholder `\cite{NUMBERS-PENDING-AUDIT-FETCH}` and `[BLOCKED-DECISION]` so the human can decide whether to wait, simulate, or pivot.
 - ❌ Do NOT change the working title without `[BLOCKED-DECISION]`. Title is a claim.
 - ❌ Do NOT extend beyond 8 pages (NeurIPS 2026 main + workshop both cap; ICLR 2027 caps at 9 with extra page for ethics — defer venue choice as `[BLOCKED-DECISION]`).
-- ❌ Do NOT touch other workers' state or any file outside `paper_meta/`.
+- ❌ Do NOT touch other workers' state or any file outside `tools/cursor_manager/paper_meta/`.
 - ❌ Do NOT use emoji anywhere in the paper text.
 - ❌ Do NOT omit Limitations subsections in §6 — venue checklists require it.
 
@@ -81,7 +81,7 @@ For each number reported in §5, the worker must include in the commit message a
 2. **Target venue**: NeurIPS 2026 workshop / ICLR 2027 / ACL 2027 demo / multi-venue strategy. Affects page count, anonymization, and dual-submission policy. **Decided**: per chat 2026-05-03, deferred until v1 draft.
 3. **Authorship + acknowledgement list**: anonymized for review; worker leaves placeholder.
 4. **Open-source license + repo URL**: required by §6 for the "open-source pointer" claim. Worker should `[BLOCKED-DECISION]` and let human decide MIT / Apache / BSD / restricted.
-5. **Whether to include codex profile vs. profile cost comparison numbers** (e.g., gpt-5.5 worker vs. claude-opus reviewer-sim): depends on whether organization-internal pricing is shareable. Worker `[BLOCKED-DECISION]` if asked to write the dollar table.
+5. **Whether to include codex profile vs. profile cost comparison numbers** (e.g., gpt-5.5 worker vs. claude-opus reviewer-sim): depends on whether ByteDance internal pricing is shareable. Worker `[BLOCKED-DECISION]` if asked to write the dollar table.
 6. **Reproducibility checklist** (NeurIPS requires): worker should fill in conservatively and `[BLOCKED-DECISION]` for any uncertain item.
 
 ## Reproducibility scaffolding (mirror paper A's pattern)

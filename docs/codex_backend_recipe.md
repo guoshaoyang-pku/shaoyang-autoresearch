@@ -1,4 +1,4 @@
-# Codex Backend Recipe (verified 2026-05-02 on <your-gpu-host>)
+# Codex Backend Recipe (verified 2026-05-02 on gpu_develop)
 
 ## TL;DR
 
@@ -29,7 +29,7 @@ OpenAI Codex v0.128.0 (research preview)
 --------
 workdir: <pwd>
 model: gpt-5.5-2026-04-24
-provider: custom_proxy
+provider: bytedance
 approval: never
 sandbox: danger-full-access
 reasoning effort: xhigh
@@ -49,21 +49,21 @@ The `session id` line is the persistence hook. Capture it via regex
 `session id: ([0-9a-f-]+)` and persist for later
 `codex exec resume <session-id>` calls.
 
-## Provider configuration (already deployed on <your-gpu-host>)
+## Provider configuration (already deployed on gpu_develop)
 
 `~/.codex/config.toml` is configured to route through a local proxy:
 
 ```toml
 model = "gpt-5.5-2026-04-24"
-model_provider = "custom_proxy"
+model_provider = "bytedance"
 model_reasoning_effort = "xhigh"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 
-[model_providers.custom_proxy]
-name = "custom upstream"
+[model_providers.bytedance]
+name = "ByteDance Codex"
 base_url = "http://localhost:4002"
-api_key = "local-proxy-placeholder"        # proxy adds real upstream auth (see keys.example.json)
+api_key = "<BYTEDANCE_API_KEY>"        # rotate periodically
 wire_api = "responses"
 
 [profiles.high]
@@ -73,10 +73,9 @@ model = "gpt-5.5-2026-04-24"
 model = "gpt-5.4-2026-03-05"
 ```
 
-Local proxy `proxy/codex_proxy.py` listens on `localhost:4002` and forwards to
-your organization's Chat Completions-compatible endpoint. Run `./proxy/start_proxy.sh`
-from the repository root (or keep your own launcher). Set `CODEX_PROXY_UPSTREAM_URL`,
-`CODEX_PROXY_API_KEY`, or fill `keys.json` as in `keys.example.json`.
+Local proxy `~/.codex/codex_proxy.py` listens on `localhost:4002` and forwards
+to ByteDance internal `/responses`-style API. Keep `~/.codex/start_proxy.sh`
+running (typically launched once per box).
 
 Quick health check:
 
@@ -160,7 +159,7 @@ codex exec resume --last --color never "next instruction" < /dev/null
 
 ## Provenance of this recipe
 
-- Smoke-tested 2026-05-02T00:08+0800 on `<your-gpu-host>` (Linux x86_64, codex CLI
-  v0.128.0, local `codex` proxy on `localhost:4002`).
+- Smoke-tested 2026-05-02T00:08+0800 on `gpu_develop` (Linux x86_64, codex CLI
+  v0.128.0, ByteDance proxy on `localhost:4002`).
 - One round-trip: `BANANA-CODEX-OK` returned in 12s, 8.8k tokens, proxy log
   `POST /responses HTTP/1.1 200`.

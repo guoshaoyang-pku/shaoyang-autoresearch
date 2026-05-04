@@ -14,11 +14,14 @@ compute host and their audit logs are not yet available
 (see~\S\ref{sec:case-setup} for the honest disclosure of which loop
 ran when). All numbers in this section derive from immutable audit
 artefacts (\texttt{git log} on branch
-\texttt{main}, \texttt{wc -l} on the
+\texttt{feature/autoresearch-sub-agents}, \texttt{wc -l} on the
 system source, the smoke-test runner output, the lit-review sub-agent
-verification report, and \texttt{state/escalations.jsonl} on the
-deployment host -- all part of the open-source release,
-Appendix~\ref{app:repo}); per HR-F no number here is a hand-estimate.
+verification report, and (where explicitly referenced) deployment
+\texttt{state/} JSONL on the authors' workstation. Runtime \texttt{state/}
+artefacts are \texttt{gitignore}d by default and are \emph{not} asserted
+to appear in the public OSS checkout; only commands and pinned commits
+needed to reproduce integer measurements are (\S\ref{sec:case-setup});
+per HR-F no number here is a hand-estimate.
 
 \subsection{Setup}
 \label{sec:case-setup}
@@ -38,8 +41,9 @@ uses \texttt{manager\_high} (also a Claude-family configuration but
 distinct from the reviewer profile to avoid sharing prompt history).
 The manager is woken by \texttt{launchd} every five minutes; the
 reviewer-sim is invoked on-demand by the manager
-(Algorithm~\ref{alg:tick}, line 16) when the worker's diff touches a
-claim-bearing region. Each worker operates inside its own git
+(Algorithm~\ref{alg:tick}, step~\ref{alg:review-sim-guard}) when the worker's diff touches a
+claim-bearing \texttt{.tex} region \emph{or} spans at least two
+\texttt{.tex} files. Each worker operates inside its own git
 worktree (\texttt{paper/neurips2026-draft-worker-<id>}); commits
 accumulate on the worker branch and never auto-merge to the trunk.
 
@@ -61,15 +65,14 @@ claim-drift violation under \S\ref{sec:discipline}.
 \label{sec:case-aggregate}
 
 The complete engineering history of the discipline-mechanism
-implementation is summarised in Table~\ref{tab:engineering}. The
-fourteen commits spanning the development of this paper and the four
-sub-agent modules add up to \(5{,}969\) lines of Python and Bash and
-\(13/13\) passing hermetic self-tests. Two numbers from this table are worth highlighting.
+implementation is summarised in Table~\ref{tab:engineering}. \textbf{LOC
+and smoke-test} integers are measured on the released public tree (2026-05-04);
+\textbf{git aggregates} on the bottom rows are from the authors' LiuLab
+source checkout because the public mirror squashes early history (previous
+paragraph). Two rows are worth highlighting below the table.
 
 \begin{table}[t]
-  \caption{System engineering audit on the public release
-    \texttt{main} branch (commit range: see Git history). Source:
-    \texttt{git log --oneline} + \texttt{git log --shortstat}.}
+  \caption{System engineering audit with split provenance (measurements 2026-05-04).}
   \label{tab:engineering}
   \centering
   \small
@@ -77,23 +80,31 @@ sub-agent modules add up to \(5{,}969\) lines of Python and Bash and
     \toprule
     \textbf{Quantity} & \textbf{Count} \\
     \midrule
-    Total commits on branch                                   & 14 \\
-    Cumulative line insertions across branch                  & $\sim 6{,}500$ \\
-    Total source lines of system (Python + Bash)              &  5{,}969 \\
-    Lines in the central CLI \texttt{mgr}                      &     770 \\
-    Largest single sub-agent (\texttt{lib/lit\_review.py})    &     858 \\
-    Smallest single sub-agent (\texttt{lib/lark\_notify.py})  &     157 \\
-    Sub-agent contract document                                &     595 \\
-    Hermetic self-tests passing (initial / final)             &  $8/8 \to 13/13$ \\
-    Sub-agents shipped in parallel (single integration day)   &       4 \\
-    \texttt{[BLOCKED-DECISION]} commits raised by humans      &       0 \\
-    \texttt{[BLOCKED-DECISION]} commits raised by workers      &  pending\(^\dagger\) \\
-    Bugs surfaced by self-test that would otherwise have shipped & 1 \\
+    \multicolumn{2}{l}{\emph{Released public tree (OSS checkout)}} \\
+    Total source lines (Python, Bash, contract Markdown)               & 5,228 \\
+    Lines in the central CLI \texttt{mgr}                             &   789 \\
+    Largest single sub-agent (\texttt{lib/lit\_review.py})           &   858 \\
+    Smallest single sub-agent (\texttt{lib/lark\_notify.py})           &   157 \\
+    Sub-agent contract \texttt{docs/sub\_agents\_contract.md}         &   593 \\
+    Sentinel module (\texttt{sentinel.py})                            &   580 \\
+    Hermetic smoke-test assertions                                     & 13/13 \\
+    Commits on public OSS \texttt{main} (squashed history)            &     3 \\
+    \midrule
+    \multicolumn{2}{l}{\emph{LiuLab branch history for }\texttt{tools/cursor\_manager}} \\
+    Path-scoped commits (LiuLab; \texttt{feature/autoresearch-sub-agents}) &    26 \\
+    Cumulative line insertions (path-scoped shortstat sum)            & 12,405 \\
+    \texttt{[BLOCKED-DECISION]} commits raised by humans              &     0 \\
+    \texttt{[BLOCKED-DECISION]} commits raised by workers             & pending\(^\dagger\) \\
+    Bugs surfaced by self-test that would otherwise have shipped    &     1 \\
+    Sub-agents shipped in parallel (single integration day)           &     4 \\
     \bottomrule
   \end{tabular}
 
   \medskip
   \footnotesize
+  \noindent\emph{Reproduce LOC/smoke on OSS \texttt{main}:} \texttt{wc -l mgr lib/*.py sentinel.py scripts/*.py scripts/*.sh *.sh docs/sub\_agents\_contract.md}; \texttt{bash scripts/smoke\_test\_sub\_agents.sh}. \emph{LiuLab aggregates:} from monorepo root, with \texttt{HEAD} on \texttt{feature/autoresearch-sub-agents}, run \texttt{git log --oneline HEAD -- tools/cursor\_manager | wc -l}; \texttt{git log --shortstat HEAD -- tools/cursor\_manager} (sum insertions).
+
+  \medskip
   \(^\dagger\)~Worker C (this paper) operates under the
   \texttt{[BLOCKED-DECISION]} discipline of \S\ref{sec:discipline-blocked}
   but at the time of writing the worker has not yet completed its first
@@ -106,10 +117,9 @@ The sub-agent contract pattern (\S\ref{sec:arch-contract}) reduced the
 implementation wall-clock for the four discipline modules from a
 hand-estimated 3--4 work-days of sequential single-developer effort to
 under thirty minutes of parallel LLM-driven implementation, a wall-clock
-reduction of approximately two orders of magnitude. The
-\(13/13\) extended smoke test (\(8/8 \to 13/13\) over the integration
-of \texttt{scripts/\_invoke\_manager.py}) was the single integration
-gate, and we observed zero post-integration regressions.
+reduction of approximately two orders of magnitude. The \(13/13\) smoke test
+(wiring of \texttt{scripts/\_invoke\_manager.py} plus the four sub-agent
+self-tests) was the single integration gate, and we observed zero post-integration regressions.
 
 \textbf{One real bug auto-caught.}
 While auditing the manager-backend dispatcher
@@ -165,72 +175,10 @@ quantitative table to the camera-ready.
 \subsection{Lit-Review Citation Verification}
 \label{sec:case-citation}
 
-The lit-review sub-agent was invoked once on the seed
-\texttt{paper\_meta/references.bib} of this paper prior to substantive
-drafting and a second time after a reviewer-anticipation pass
-identified a missing entry. Of the nine bibliography entries
-ultimately included, all nine had their primary metadata fields
-(title, authors, year, arXiv id or canonical URL) verified against
-arXiv, ACL Anthology, GitHub, or the publishing organization's blog;
-three had defects (one inserted by the seed bibliography drafter,
-one minor canonical-name issue, and one missing-entry pattern that
-required a second pass).
-Table~\ref{tab:litreview} summarises the verification outcomes.
+The lit-review sub-agent was invoked twice on
+\texttt{paper\_meta/references.bib}; nine entries were verified against
+primary sources with three non-trivial defects surfaced and corrected
+before submission (full keyed log in Appendix~\ref{app:litreview-table}).
 
-\begin{table}[t]
-  \caption{Outcome of \texttt{mgr lit-review paper\_c} on the seed
-    bibliography of this paper. ``Defect found'' means the seed entry
-    had a non-trivial metadata error; the dispatcher raised a
-    \texttt{[BLOCKED-DECISION]}-equivalent advisory rather than
-    silently rewriting the bibliography.}
-  \label{tab:litreview}
-  \centering
-  \footnotesize
-  \begin{tabular}{l c c p{0.38\textwidth}}
-    \toprule
-    \textbf{Citation key} & \textbf{Verified} & \textbf{Defect} & \textbf{Defect detail (if any)} \\
-    \midrule
-    \texttt{song2026paperorchestra}        & yes & no  & --- \\
-    \texttt{sibyl2026system}               & yes & yes & seeded with fictitious ``renamed from FARS'' note; corrected to acknowledge separate provenance \\
-    \texttt{fars2026analemma}              & yes & yes & added in second pass after the FARS-vs-us positioning gap was identified \\
-    \texttt{yamada2025aiscientistv2}       & yes & no  & --- \\
-    \texttt{karpathy2026autoresearch}      & yes & yes & canonical repo name is lowercase \texttt{autoresearch}, not \texttt{AutoResearch} \\
-    \texttt{schmidgall2025agentlaboratory} & yes & no  & --- \\
-    \texttt{lu2024aiscientist}             & yes & no  & --- \\
-    \texttt{tang2025airesearcher}          & yes & no  & --- \\
-    \texttt{miyai2026paperreconstruction}  & yes & no  & --- \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The three surfaced defects are minor in isolation but illustrative
-of the failure modes the lit-review sub-agent is targeted at: a
-fictitious provenance claim
-(\texttt{sibyl2026system} seeded with a ``renamed from FARS'' note
-that the verification pass refuted by reading the project README and
-the FARS primary source); a wrong canonical name
-(\texttt{karpathy/AutoResearch} versus the actual
-\texttt{karpathy/autoresearch}); and a missing-entry pattern
-(\texttt{fars2026analemma} was absent from the seed despite being
-the most quantitatively important comparison point in
-\S\ref{sec:related}, surfaced when a reviewer-anticipation pass
-asked which scale-throughput baseline the paper engaged). All three
-would have produced reviewer-visible defects in the camera-ready
-had they shipped uncorrected.
-
-The Sentinel watchdog of \S\ref{sec:discipline-sentinel} was
-specified in response to a real incident on the deployment host
-(\texttt{gpu\_develop}, 2026-05-02) in which the LLM CLI in use at
-the time produced an identical exit-code-1 failure on every
-five-minute tick for approximately twenty-four hours before the
-deployment owner manually noticed the pattern in
-\texttt{state/escalations.jsonl}. (The CLI in question was
-cursor-agent under an early prototype; the codex-only loop has the
-same failure mode and the same need for a watchdog.)
-Sentinel's same-cause-streak heuristic
-(\S\ref{sec:discipline-sentinel}, item~ii) is parameterised to fire
-after four consecutive identical failures; the same incident under
-the watchdog would have produced a Lark notification within twenty
-minutes (a reduction by a factor of approximately seventy). The full
-incident reconstruction and rendered Lark message are in
-Appendix~\ref{app:sentinel-msg}.
+A real 2026-05-02 deployment incident motivating Sentinel is summarised
+under Appendix~\ref{app:sentinel-msg}.

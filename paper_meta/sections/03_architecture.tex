@@ -57,7 +57,7 @@ the prompt unchanged was itself a hard-rule violation candidate (HR-J in
 \State \texttt{diff} $\gets$ \texttt{mgr diff <wid>}; \texttt{rules} $\gets$ \texttt{mgr rules <wid>}
 \State Check each hard rule against \texttt{diff} citing concrete file:line evidence
 \If{paper-claim file (abstract / intro / conclusion) touched \textbf{or} diff $\geq 2$ files}
-    \State \texttt{mgr review-sim <wid>} \Comment{cross-model NeurIPS-reviewer judgement}
+    \State \label{alg:review-sim-guard} \texttt{mgr review-sim <wid>} \Comment{cross-model NeurIPS-reviewer judgement}
 \EndIf
 \If{any rule violated and not auto-correctable}
     \State \texttt{mgr escalate <wid>}; \textbf{return} \texttt{\{action: escalate\}}
@@ -103,9 +103,10 @@ The four v2 sub-agent commands of \S\ref{sec:discipline}
 files directly, run \texttt{git push}, change worker prompts, or call
 any LLM other than itself; every action it wants to take must factor
 through one of these atoms. The Python implementation of the CLI is
-\(770\) lines (out of \(5{,}969\) total LOC for the system in Python
-plus Bash, measured by \texttt{wc -l mgr lib/*.py sentinel.py
-scripts/\{*.py,*.sh\} *.sh}); this
+\(789\) lines (out of \(5{,}228\) total LOC for the released tree in Python
+plus Bash plus the sub-agent contract Markdown, counted on 2026-05-04 by
+\texttt{wc -l mgr lib/*.py sentinel.py scripts/*.py scripts/*.sh *.sh docs/sub\_agents\_contract.md} at the public-release commit cited in
+Appendix~\ref{app:repo}); this
 restriction is deliberate -- the manager's job is operational reasoning,
 not authoring, and constraining its action space prevents the most
 common failure mode of prior systems where a critic agent quietly
@@ -126,7 +127,10 @@ not see each other's edits, and never push to remote (commits
 accumulate on the local worker branch until a human merges them via
 a non-fast-forward merge). All audit logs are append-only JSONL
 written by \texttt{mgr} and form the immutable ground truth that
-\S\ref{sec:case} mines for empirical claims.
+\S\ref{sec:case} mines for empirical claims where those artefacts are
+available (git history and verifier transcripts; default developer
+checkouts \texttt{gitignore} \texttt{state/}, so runtime JSONL is not
+claimed to ship in full in the public OSS tree -- see~\S\ref{sec:case-setup}).
 
 \subsection{Sub-agent Contract Design}
 \label{sec:arch-contract}
@@ -138,7 +142,7 @@ under thirty wall-clock minutes -- a wall-clock improvement of
 approximately two orders of magnitude over our initial three-to-four
 work-day estimate. The mechanism is what we call a \emph{sub-agent
 contract}: a single Markdown file
-(\texttt{docs/sub\_agents\_contract.md}, 595 lines) that fully specifies,
+(\texttt{docs/sub\_agents\_contract.md}, 593 lines) that fully specifies,
 for each module to be shipped in parallel,
 
 (i) the exact set of files the implementer is allowed to create or

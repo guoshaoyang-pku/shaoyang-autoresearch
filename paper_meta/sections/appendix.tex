@@ -5,19 +5,43 @@
 \section{Open-Source Release}
 \label{app:repo}
 
-The complete system source, this paper's LaTeX source, the seed
+The complete system source, this paper's \LaTeX{} source, and the seed
 \texttt{paper\_meta/references.bib} that the lit-review sub-agent
-verified, and the immutable audit logs cited throughout
-\S\ref{sec:case} are released under the MIT License at the
-following repository:
+verified are released under the MIT License at the public GitHub
+repository below. Runtime manager/worker JSONL under \texttt{state/} is
+local to each deployment (and \texttt{gitignore}d by default); integers
+in \S\ref{sec:case} are reproduced from shell/git commands and verifier
+artefacts named in Table~\ref{tab:engineering} (including its reproducibility
+note), not from
+a bundled export of those logs.
 
 \begin{center}
   \url{https://github.com/guoshaoyang-pku/shaoyang-autoresearch}
 \end{center}
 
-\noindent Exact commit identifiers for the engineering audit
-(Table~\ref{tab:engineering}) are omitted here; they can be recovered
-from public \texttt{git} history after cloning the repository.
+\paragraph{Public mirror vs.\ source-branch history.}
+The public GitHub checkout uses a squashed \texttt{main} history for
+readability. Line-count and smoke-test integers in
+Table~\ref{tab:engineering} are pinned to that released tree with the
+shell commands printed under the table. Fine-grained commits under
+\texttt{tools/cursor\_manager} on the authors' LiuLab branch (where this
+paper was dogfooded), e.g.\ the dispatcher defect surfaced at
+\texttt{c9ceeef}, are reproducible from that branch's git log but are not
+individually replayable from the squashed public counter alone.
+
+\noindent\textbf{Pinned SHAs for Table~\ref{tab:engineering}.}
+\textbf{(i)} Public checkout: clone the repository above, checkout
+\texttt{main}, and run \texttt{git rev-parse HEAD} for the exact commit
+used in the \texttt{wc} and smoke-test rows (reported as
+\texttt{POST\_RELEASE\_COMMIT\_OSS} in the camera-ready artefact list).
+\textbf{(ii)} Source-branch aggregates: on the authors' LiuLab checkout,
+on \texttt{feature/autoresearch-sub-agents}, run the \texttt{git log} invocations
+printed beneath Table~\ref{tab:engineering} at \texttt{git rev-parse HEAD}
+(meaning: the integers in the table are exact only for the branch tip that
+contains this \texttt{paper\_meta} snapshot).
+
+\noindent An internal corporate mirror may track the same files under a
+different host; the GitHub URL above is the canonical citeable artefact.
 
 \section{Sub-Agent Contract Template}
 \label{app:contract-template}
@@ -26,7 +50,7 @@ The contract template that allowed four sub-agent modules to ship in
 parallel (\S\ref{sec:arch-contract}, Table~\ref{tab:engineering})
 follows the schema below. Each instance of the schema is a single
 Markdown section in \texttt{docs/sub\_agents\_contract.md}; the four
-sections together total \(595\) lines.
+sections together total \(593\) lines (\texttt{wc -l docs/sub\_agents\_contract.md} on the released tree).
 
 \begin{quote}\small
 \noindent\textbf{Module \texttt{<name>}.} \\
@@ -47,6 +71,35 @@ sections together total \(595\) lines.
   with arguments \texttt{<args>}, exit codes \texttt{<map>}, stdout
   format \texttt{<format>}.
 \end{quote}
+
+\section{Lit-Review Verification Log}
+\label{app:litreview-table}
+
+\begin{table}[t]
+  \caption{Outcome of \texttt{mgr lit-review paper\_c} on the seed
+    bibliography of this paper. ``Defect found'' means the seed entry
+    had a non-trivial metadata error; the dispatcher raised a
+    \texttt{[BLOCKED-DECISION]}-equivalent advisory rather than
+    silently rewriting the bibliography.}
+  \label{tab:litreview}
+  \centering
+  \footnotesize
+  \begin{tabular}{l c c p{0.38\textwidth}}
+    \toprule
+    \textbf{Citation key} & \textbf{Verified} & \textbf{Defect} & \textbf{Defect detail (if any)} \\
+    \midrule
+    \texttt{song2026paperorchestra}        & yes & no  & --- \\
+    \texttt{sibyl2026system}               & yes & yes & seeded with fictitious ``renamed from FARS'' note; corrected to acknowledge separate provenance \\
+    \texttt{fars2026analemma}              & yes & yes & added in second pass after the FARS-vs-us positioning gap was identified \\
+    \texttt{yamada2025aiscientistv2}       & yes & no  & --- \\
+    \texttt{karpathy2026autoresearch}      & yes & yes & canonical repo name is lowercase \texttt{autoresearch}, not \texttt{AutoResearch} \\
+    \texttt{schmidgall2025agentlaboratory} & yes & no  & --- \\
+    \texttt{lu2024aiscientist}             & yes & no  & --- \\
+    \texttt{tang2025airesearcher}          & yes & no  & --- \\
+    \texttt{miyai2026paperreconstruction}  & yes & no  & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{Sentinel Incident Reconstruction and Lark Notification}
 \label{app:sentinel-msg}
@@ -123,8 +176,8 @@ budget-evaluated that addition.
 \paragraph{(L6) Sentinel and Lark coupling.} Sentinel's four
 trigger patterns are hand-tuned and frozen; a more principled
 approach would learn them from a longer deployment history.
-\texttt{lark\_notify.py} wraps an optional Lark CLI adapter; teams
-without that toolchain must replace this adapter (the public API consists of one
+\texttt{lark\_notify.py} wraps an internal Lark CLI; teams outside
+ByteDance must replace this adapter (the public API consists of one
 function with one positional argument).
 
 \section{Reproducibility Checklist}
@@ -132,13 +185,15 @@ function with one positional argument).
 
 We follow the NeurIPS 2026 reproducibility checklist. The system source
 and this paper's source are released together (Appendix~\ref{app:repo})
-under MIT license. The audit logs from which all numbers in
-\S\ref{sec:case} derive are committed to the repository. The lit-review
+under MIT license. Integer rows in \S\ref{sec:case} tie to explicit
+commands in Table~\ref{tab:engineering} and its caption ---
+\texttt{state/} JSONL is deployment-local unless an operator commits it
+deliberately. The lit-review
 sub-agent's Semantic Scholar queries used the public unauthenticated
 endpoint and are reproducible up to API rate limits; the dispatcher
 emits a structured advisory rather than a number when an entry cannot
 be re-verified, so partial reruns are detectable. The cross-model
-ablation (\S\ref{sec:case-ablation}) requires a Codex API key and a
-Cursor account; we list the exact model strings and the proxy
+ablation (\S\ref{sec:case-ablation}) requires an API-reachable codex CLI
+and provider credentials; we list the exact model strings and the proxy
 configuration in \texttt{docs/codex\_backend\_recipe.md}. No
 human-subject data is used; no model is trained; no GPU is occupied.

@@ -100,7 +100,7 @@ def format_lark_message(alert: SentinelAlert) -> str:
             lines.append(f"    - {d}")
     action = alert.extra.get(
         "suggested_action",
-        f"ssh into <your-gpu-host> and check `mgr audit {worker} -n 20`",
+        f"ssh into gpu_develop and check `mgr audit {worker} -n 20`",
     )
     lines.extend(["", f"- **suggested action**: {action}", ""])
     footer_ts = time.strftime("%Y-%m-%dT%H:%M%z")

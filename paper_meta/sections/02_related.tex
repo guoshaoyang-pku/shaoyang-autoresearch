@@ -77,22 +77,10 @@ benchmark-only paradigm with an explicit hallucination-detection
 component but again does not include real-submission deployments.
 
 \paragraph{Discipline mechanisms in agent systems.}
-The discipline mechanisms we introduce in \S\ref{sec:discipline} have
-partial precedents in prior systems but none combines them in the
-form we deploy. \citet{sibyl2026system} use a multi-agent debate
-quality gate, which is a confidence-aggregation pattern rather than a
-hard-rule pattern; debate can in principle be voted-down by the same
-reward-hacking dynamic it is meant to check.
-\citet{yamada2025aiscientistv2} use agentic tree search to backtrack
-when an experiment fails, which is closer to our Sentinel watchdog in
-spirit but operates inside the experimentation stage rather than as a
-deployment-level monitor. PaperOrchestra's content-refinement loop is
-quality-improving rather than claim-protective: it can rewrite text to
-be smoother but does not enforce that the rewrite preserves the
-original claim. The
-\texttt{[BLOCKED-DECISION]} escalation protocol of
-\S\ref{sec:discipline-blocked}, the cross-model adversarial
-configuration of \S\ref{sec:discipline-crossmodel}, and the explicit
-silent-failure monitor of \S\ref{sec:discipline-sentinel} are, to our
-knowledge, novel in the autoresearch literature, and we ablate each
-in \S\ref{sec:case}.
+Prior systems contribute debate gates \citep{sibyl2026system},
+experimentation backtracking \citep{yamada2025aiscientistv2}, and
+content refiners that optimize fluency \citep{song2026paperorchestra}.
+None combines claim-protected hard-rule zones, an explicit human
+\texttt{[BLOCKED-DECISION]} halt, cross-API-model adversarial review, and
+a deployment watchdog in the configuration of \S\ref{sec:discipline}; we
+ablate these pieces empirically in \S\ref{sec:case}.

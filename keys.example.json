@@ -1,4 +1,5 @@
 {
+  "_README": "Copy this file to keys.json at the repo root and delete _README. Do not commit keys.json.",
   "cursor_api_key": "crsr_REPLACE_ME",
   "openai_api_key": "sk-REPLACE_ME",
   "anthropic_api_key": "sk-ant-REPLACE_ME",
@@ -27,5 +28,25 @@
   "github": {
     "user": "REPLACE_ME",
     "default_repo": "guoshaoyang-pku/shaoyang-autoresearch"
+  },
+  "_FIELD_NOTES": {
+    "cursor_api_key": "Optional placeholder for Cursor product keys; the codex-only loop does not require it.",
+    "openai_api_key": "Optional direct OpenAI key if your tooling reads it (codex typically uses ~/.codex/config.toml).",
+    "anthropic_api_key": "Optional Anthropic key for non-codex tools; codex profiles usually hold model credentials.",
+    "semantic_scholar_api_key": "Empty = Semantic Scholar free tier (~1 RPS). Fill for higher rate limits; can also set in config.toml [lit_review].",
+    "codex_proxy": "Local shim (proxy/codex_proxy.py): maps Codex Responses-style calls to your org Chat Completions endpoint.",
+    "codex_proxy.listen_host": "Bind address for the proxy HTTP server (default loopback).",
+    "codex_proxy.listen_port": "TCP port (default 4002; matches common local codex base_url examples).",
+    "codex_proxy.upstream_base_url": "Prefix URL for your provider before /chat/completions (see proxy/README.md).",
+    "codex_proxy.bearer_token": "Secret sent upstream; prefer env CODEX_PROXY_API_KEY in production.",
+    "codex_proxy.fallback_models": "Ordered model names the proxy may try on transient failures.",
+    "codex_proxy.default_model": "Default resolved model id when the client omits one.",
+    "codex_proxy.model_aliases": "Short name → full deployment id mapping for convenience.",
+    "lark_notification": "ByteDance/Lark webhook config for Sentinel alerts; disable for non-Lark setups.",
+    "lark_notification.webhook_url": "Incoming webhook URL or null to silence out-of-band IM.",
+    "lark_notification.enabled": "Master switch; false skips IM sends even if webhook_url is set.",
+    "github": "Optional metadata for future automation (not read by mgr core loop).",
+    "github.user": "GitHub username or org for scripting.",
+    "github.default_repo": "Canonical public mirror for this codebase."
   }
 }

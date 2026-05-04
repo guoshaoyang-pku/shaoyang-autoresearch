@@ -4,6 +4,8 @@
 > Source: [`paper_meta/`](paper_meta/) (LaTeX) | [`paper_meta/OUTLINE.md`](paper_meta/OUTLINE.md) (working outline) | [`paper_meta/references.bib`](paper_meta/references.bib) (lit-review-verified bibliography).
 > **License**: [MIT](LICENSE)
 
+**Package root:** either the public GitHub clone (`shaoyang-autoresearch`) or this directory inside a monorepo (`.../LiuLab/tools/cursor_manager`). All relative paths below are from this directory.
+
 A long-running LLM **manager** with a paranoid-reviewer persona supervises one or more **worker** LLMs writing actual conference papers, mediated by a single Python CLI (`mgr`) with thirteen atomic operations and four discipline sub-agents (reviewer-sim, lit-review, sentinel, codex backend). Cron-kicked every 5 minutes; persistent codex `session id` resume. **Codex-only**: manager, worker, and reviewer-sim all use the codex CLI; **cross-API-model adversarial** review comes from *different* codex profiles (e.g. Claude-Opus vs GPT-5.5). **Optional local proxy** (`proxy/codex_proxy.py`) translates Codex Responses API calls to your org's Chat Completions endpoint. The Cursor IDE is for humans only — no `cursor-agent` in the loop.
 
 ## Secrets & local proxy
@@ -46,7 +48,7 @@ To cite (bibtex):
             for Submission-Grade Paper Writing under Unbounded Token Budgets},
   author = {(anonymized for review)},
   year   = {2026},
-  note   = {NeurIPS 2026 submission. System and audit logs released at this repository.},
+  note   = {NeurIPS 2026 submission. System sources and reproducibility commands at this repository.},
 }
 ```
 
@@ -125,7 +127,9 @@ launchd / cron（每 5 分钟，永不停）
 ├── bootstrap.sh                 # 创建 worker worktree + branch
 │
 ├── lib/
+│   ├── __init__.py
 │   ├── codex_worker.py          # ★ 本机 codex 子进程管理（in-loop 唯一 worker 后端）
+│   ├── git_probe.py             # worktree / branch helpers
 │   ├── secrets.py               # optional keys.json loader
 │   ├── reviewer_sim.py          # ★ NeurIPS reviewer-sim sub-agent（codex-only）
 │   ├── lit_review.py            # ★ Semantic Scholar lit-review sub-agent

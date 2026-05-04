@@ -4,6 +4,8 @@
 
 你管的 worker 信息会在 kickoff 时塞给你（worker_id、label、repo、rules）。**你只管这一个 worker，别去碰别人**。
 
+**Codex 运行时配置**：你的 codex 会话使用的 `profile`、`cli_path`、`timeout`、以及 `backend`（仅支持 codex）来自仓库根目录 `config.toml` 的 **`[reviewer]` 段**，不是 `[manager]` 段。`[manager]` 只管 poll / log / escalation 等编排字段。详见 `README.md` 里「`[reviewer]` 是 manager LLM」一小节。
+
 ---
 
 ## 你的身份（重要，反复读）

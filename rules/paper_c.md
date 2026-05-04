@@ -1,6 +1,6 @@
 # 论文 C (cursor_manager 系统 meta paper, dogfood) Worker 专属规则
 
-仓库子目录：`paper_meta/`
+仓库子目录：`tools/cursor_manager/paper_meta/`
 
 这是 dogfood 实验：worker 在用 cursor_manager 框架写关于 cursor_manager 的 paper。
 
@@ -87,7 +87,7 @@ paper 文本和 figure caption 全程不能出现 emoji。code block / appendix 
 
 ### HR-I. Worktree 边界
 
-worker 可以也只能修改 `paper_meta/` 下的文件。任何对 `lib/`, `prompts/`, `rules/`, `scripts/`, `docs/`, `state/` 的改动 = 立刻 cancel + escalate。可以读上述目录（你需要它们写 paper）。
+worker 可以也只能修改 `tools/cursor_manager/paper_meta/` 下的文件。任何对 `lib/`, `prompts/`, `rules/`, `scripts/`, `docs/`, `state/` 的改动 = 立刻 cancel + escalate。可以读上述目录（你需要它们写 paper）。
 
 例外：可以新增 `paper_meta/figures/`, `paper_meta/CHECKLIST_CN.md`, `paper_meta/COVER_LETTER_DRAFT.md` 等周边文档（与 paper_a 同 pattern）。
 
@@ -124,7 +124,7 @@ worker 描述 sub-agent 行为前应 read `lib/<module>.py` 确认。
 
 ## 绝对禁区
 
-- 不要碰 `` 任何 **不在** `paper_meta/` 下的文件
+- 不要碰 `tools/cursor_manager/` 任何 **不在** `paper_meta/` 下的文件
 - 不要碰 paper_a / paper_b 的任何东西
 - 不要 close 任何 `[BLOCKED-DECISION]` 自己提的
 - 不要修改 working title 不 raise BLOCKED

@@ -4,19 +4,24 @@
 # Codex-only：所有 in-loop LLM（manager / worker / reviewer-sim）
 # 走 codex CLI；cursor-agent 已彻底从 in-loop 中移除，远程 GPU
 # 跑不了 cursor。Cursor IDE 仅作为人类操作员的入口。
+#
+# Monorepo：若 LiuLab checkout 根目录在 .../LiuLab，则 [worker].local_repo_path
+# 指向该根目录；dogfood meta-paper 的 [[workers]] paper_c.subdir 需为
+# tools/cursor_manager/paper_meta。本文件以独立 OSS 仓库布局为默认示例。
 
 [reviewer]
 # === In-loop MANAGER LLM (codex). tick.sh / kickoff.sh read THIS table. ===
 # NOT under [manager]: [manager] has no backend/cli_path/profile.
 # Naming legacy: manager persona = paranoid reviewer; section name stayed [reviewer].
 # Manager LLM 配置。tick.sh / kickoff.sh 都从这里读。
+# kickoff.sh 注入的 persona 正文来自 prompts/manager.md（profile/cli 仍读此段）。
 # 唯一支持的 backend 是 "codex"；任何其它值会在 _invoke_manager.py
 # 启动时被立刻拒绝。
 backend = "codex"
 cli_path = "codex"
 profile = "high"                     # ~/.codex/config.toml 里的 [profiles.<profile>]
 timeout_seconds = 300                # 单次 tick 硬上限
-prompt_path = "prompts/reviewer.md"
+prompt_path = "prompts/manager.md"
 
 # 跨 API 模型对抗配置：让 manager / worker / reviewer-sim 各自走
 # 不同的 codex profile（profile 决定底层模型，e.g. claude-opus vs gpt-5.5）。
@@ -34,8 +39,8 @@ prompt_path = "prompts/reviewer.md"
 backend = "codex"
 cli_path = "codex"
 profile = "worker_high"              # 与 [reviewer].profile 不同 → cross-API-model
-# 远程机器上 shaoyang-autoresearch 本地 checkout 路径。
-local_repo_path = "/path/to/shaoyang-autoresearch"
+# 本仓库 git 根目录（OSS clone 或 LiuLab monorepo 根目录）。
+local_repo_path = "/path/to/REPO_ROOT"
 worktree_base = "paper/neurips2026-draft"
 worker_branch_prefix = "paper/neurips2026-draft-worker-"
 default_timeout_seconds = 1800
@@ -112,6 +117,7 @@ subdir = "scaling law toy/paper_neurips2026"
 # Dogfood meta-paper: cursor_manager 系统自身的 system paper。
 # Disabled by default — 远程 enable 时手动改 enabled = true。
 # 详见 docs/autoresearch_landscape_2026_05.md + paper_meta/OUTLINE.md。
+# Monorepo：subdir = "tools/cursor_manager/paper_meta"
 id = "paper_c"
 label = "cursor_manager system paper (dogfood meta-evaluation)"
 enabled = false

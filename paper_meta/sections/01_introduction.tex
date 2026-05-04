@@ -70,14 +70,17 @@ the $\geq 6$ accept-decision band.
 \textbf{(C3)} We introduce cross-API-model adversarial review --
 operationalized in the codex-only loop by giving the worker and the
 reviewer-sim sub-agent \emph{different} codex profiles that map to
-different underlying API models -- and demonstrate by ablation that it
-reduces reward hacking on the LLM judge relative to same-model
-self-review (\S\ref{sec:case-ablation}).
+different underlying API models -- and pre-register an ablation protocol
+with qualitative evidence consistent with reduced reward hacking under
+same-model self-review (\S\ref{sec:case-ablation}; quantitative table
+deferred to camera-ready as noted there).
 \textbf{(C4)} We propose a four-mechanism discipline contract
 (hard-rule, BLOCKED-DECISION, cross-model review, Sentinel watchdog)
 intended to lift multi-agent paper writing from benchmark grade to
 submission grade; each mechanism is individually ablated in
-\S\ref{sec:case}. All numbers in \S\ref{sec:case} are queried from
-immutable audit logs; the system source, this paper's source, and the
-paper's complete commit history are released as a single git
-repository (link in Appendix~\ref{app:repo}).
+\S\ref{sec:case}. All numbers in \S\ref{sec:case} are tied to
+reproducible shell / git commands or verifier outputs cited there; the released source tree and this paper's \LaTeX{} are under MIT
+license at the public repository in Appendix~\ref{app:repo}, alongside a
+squashed public git history; line-granular development history for the
+dogfood deployment remains available on the authors' source branch cited
+in~\S\ref{sec:case-setup}.

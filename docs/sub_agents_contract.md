@@ -1,7 +1,7 @@
 # Sub-Agents Contract (autoresearch v2)
 
 **Status**: spec for 2026-05 ship cycle
-**Branch**: `main`
+**Branch**: `feature/autoresearch-sub-agents`
 **Companion**: `autoresearch_landscape_2026_05.md`（why these 4 modules）, `codex_backend_recipe.md`（codex CLI invocation details）
 
 This file is a **contract** between 4 parallel implementation streams + the main integration line. Each subagent reads only its own module section + the "shared conventions" section. No subagent should depend on another subagent's runtime artifacts.
@@ -13,7 +13,7 @@ This file is a **contract** between 4 parallel implementation streams + the main
 ### 0.1 Filesystem layout
 
 ```
-
+tools/cursor_manager/
 ├── lib/
 │   ├── state.py           # JsonlLog, AgentRegistry, file_lock, expand, WorkerRunInfo, workers_root
 │   ├── codex_worker.py    # codex backend (sole in-loop LLM driver)
@@ -58,7 +58,7 @@ Use `from lib.state import JsonlLog, AgentRegistry, expand, file_lock`. Do not i
 
 Each subagent should:
 
-1. Make 1-3 logical commits on `main`. Style: `autoresearch: <module> <action>`.
+1. Make 1-3 logical commits on `feature/autoresearch-sub-agents`. Style: `tools(cursor_manager): <module> <action>`.
 2. Body explains WHY (not just what changed). Reference this contract doc as `docs/sub_agents_contract.md`.
 3. Do NOT push. Main integration line will resolve conflicts (none expected, since modules touch disjoint files) and push once.
 
@@ -82,8 +82,8 @@ Cross-API-model rule (codex-only loop): worker and reviewer-sim must use **diffe
 
 | Path | Purpose |
 |---|---|
-| `lib/reviewer_sim.py` | `ReviewerSim` class + `StubReviewerSim` |
-| `prompts/reviewer_sim_neurips.md` | NeurIPS reviewer persona prompt |
+| `tools/cursor_manager/lib/reviewer_sim.py` | `ReviewerSim` class + `StubReviewerSim` |
+| `tools/cursor_manager/prompts/reviewer_sim_neurips.md` | NeurIPS reviewer persona prompt |
 
 ### 1.3 API spec
 
@@ -194,7 +194,7 @@ We need to (a) verify all references in the paper's `.bib` exist on Semantic Sch
 
 | Path | Purpose |
 |---|---|
-| `lib/lit_review.py` | `LitReview` class + `StubLitReview` + `SemanticScholarClient` |
+| `tools/cursor_manager/lib/lit_review.py` | `LitReview` class + `StubLitReview` + `SemanticScholarClient` |
 
 ### 2.3 API spec
 
@@ -328,8 +328,8 @@ Cursor-agent loop ran 24h on GPU with `exit code 1` and nobody noticed. Sentinel
 
 | Path | Purpose |
 |---|---|
-| `sentinel.py` | Top-level entry: `python sentinel.py [--self-test] [--dry-run]` |
-| `lib/lark_notify.py` | `LarkNotifier` wrapper around `lark-cli im +messages-send` |
+| `tools/cursor_manager/sentinel.py` | Top-level entry: `python sentinel.py [--self-test] [--dry-run]` |
+| `tools/cursor_manager/lib/lark_notify.py` | `LarkNotifier` wrapper around `lark-cli im +messages-send` |
 
 ### 3.3 API spec
 
@@ -412,7 +412,7 @@ Dedupe: same alert key (heuristic + worker_id) within `dedupe_hours = 4` is supp
     1. [HH:MM] <reason 1>
     2. [HH:MM] <reason 2>
     3. [HH:MM] <reason 3>
-- **suggested action**: ssh into <your-gpu-host> and check `mgr audit paper_a -n 20`
+- **suggested action**: ssh into gpu_develop and check `mgr audit paper_a -n 20`
 
 (Sent by cursor_manager/sentinel.py @ 2026-05-03T19:45+0800)
 ```
@@ -431,7 +431,7 @@ python sentinel.py --self-test
 
 ### 3.7 Recipient configuration
 
-Sentinel reads `state/sentinel/recipient.json` for the alert target (kind + value). If the file doesn't exist, sentinel logs a warning to stderr and exits 0. Integration line will document creating this file with the user's Lark user_id (resolvable via `lark-cli contact +open-id-by-name "the deployment owner"`).
+Sentinel reads `state/sentinel/recipient.json` for the alert target (kind + value). If the file doesn't exist, sentinel logs a warning to stderr and exits 0. Integration line will document creating this file with the user's Lark user_id (resolvable via `lark-cli contact +open-id-by-name "Guo Shaoyang"`).
 
 ---
 
@@ -445,7 +445,7 @@ Codex is the only LLM CLI we can run on remote GPU hosts (cross-platform tokens 
 
 | Path | Purpose |
 |---|---|
-| `lib/codex_worker.py` | `CodexWorker` class (the only worker backend) |
+| `tools/cursor_manager/lib/codex_worker.py` | `CodexWorker` class (the only worker backend) |
 
 The legacy `lib/local_worker.py` (cursor-agent worker) has been deleted; `mgr` constructs `CodexWorker` directly and rejects any other value of `[worker].backend` at config load time.
 
@@ -548,7 +548,7 @@ python -m lib.codex_worker --self-test
 
 ### 4.7 Local proxy / config out of scope
 
-The codex CLI's `~/.codex/config.toml` and local proxy (`proxy/` in this repo) must be configured per `docs/codex_backend_recipe.md`. Module D doesn't touch those. If `codex` is not on PATH, `CodexWorker.start()` should raise `RuntimeError("codex CLI not found on PATH; see docs/codex_backend_recipe.md for installation")`.
+The codex CLI's `~/.codex/config.toml` and ByteDance proxy setup are already done on the GPU machine and documented in `docs/codex_backend_recipe.md`. Module D doesn't touch those. If `codex` is not on PATH, `CodexWorker.start()` should raise `RuntimeError("codex CLI not found on PATH; see docs/codex_backend_recipe.md for installation")`.
 
 ---
 
@@ -564,8 +564,8 @@ After all 4 modules report done + smoke-test passes, the main integration line:
 2. Adds `[reviewer_sim]`, `[lit_review]`, `[sentinel]` sections to `config.example.toml`
 3. Updates `prompts/manager.md` to mention when to use the new subcommands
 4. Updates `README.md` with the new sub-agent overview
-5. Adds `scripts/smoke_test_sub_agents.sh` that runs all 4 self-tests + a tiny end-to-end check
-6. Commits + pushes to `main`
+5. Adds `tools/cursor_manager/scripts/smoke_test_sub_agents.sh` that runs all 4 self-tests + a tiny end-to-end check
+6. Commits + pushes to `feature/autoresearch-sub-agents`
 
 ---
 
@@ -577,11 +577,11 @@ Before starting:
 - [ ] Read `docs/autoresearch_landscape_2026_05.md` for context (only the section relevant to your module)
 - [ ] Read `lib/state.py` to understand JsonlLog / AgentRegistry primitives
 - [ ] Read `lib/reviewer.py` to understand the existing Reviewer + Verdict pattern (Module A mirrors this; others may borrow the StubXxx pattern)
-- [ ] Confirm you're on branch `main`
+- [ ] Confirm you're on branch `feature/autoresearch-sub-agents`
 
 While working:
 
-- [ ] Make small commits with `autoresearch: <module> <verb>` style
+- [ ] Make small commits with `tools(cursor_manager): <module> <verb>` style
 - [ ] Each commit body explains WHY
 - [ ] Do NOT push
 - [ ] Add module docstring + standalone `__main__` block

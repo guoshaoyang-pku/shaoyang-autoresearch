@@ -495,7 +495,7 @@ def _self_test() -> int:
         "--------\n"
         "workdir: /tmp/test\n"
         "model: gpt-5.5-2026-04-24\n"
-        "provider: custom_proxy\n"
+        "provider: bytedance\n"
         "approval: never\n"
         "sandbox: danger-full-access\n"
         "reasoning effort: xhigh\n"

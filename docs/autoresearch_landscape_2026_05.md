@@ -2,7 +2,7 @@
 
 **Audience**: 自己 + 同事 reviewer（@俞善斌 已知会）
 **Status**: 调研完成稿，欢迎 challenge
-**Driving question**: PaperOrchestra（Google Cloud AI Research, arxiv 2604.05018, Apr 2026）是否显著好于现有方案？是否更适合写 NeurIPS 论文？我们 `` 这套要不要换？
+**Driving question**: PaperOrchestra（Google Cloud AI Research, arxiv 2604.05018, Apr 2026）是否显著好于现有方案？是否更适合写 NeurIPS 论文？我们 `tools/cursor_manager/` 这套要不要换？
 
 ---
 
@@ -30,7 +30,7 @@
 | **AI Scientist v2** | 2025-04 | Sakana AI Lab | ✅ [SakanaAI/AI-Scientist-v2](https://github.com/SakanaAI/AI-Scientist-v2) | 5,977 | Progressive agentic tree-search + experiment manager + VLM 视觉反馈 | 端到端，**实测过 ICLR'25 workshop peer review** |
 | **Karpathy AutoResearch** | 2025 | Karpathy | ✅ [karpathy/AutoResearch](https://github.com/karpathy/AutoResearch) | 78,564 | Agent 修 `program.md` 而不是 .py，5min 实验 + val_bpb 评估 | 单 GPU ML research，"vibe research" |
 | **Agent Laboratory** | 2025 | EMNLP'25 findings | ✅ ([agentlaboratory.github.io](https://agentlaboratory.github.io/)) | n/a | 三阶段：lit review → experimentation → report writing | 端到端，比 baseline 省 84% cost |
-| **我们 `tools/cursor_manager`** | 2026-05 | 自研 | (proprietary deployment) | 0 | 1 manager + 1 worker (adversarial pair) + git worktree + JSONL audit | 真 NeurIPS submission，已跑通 a tracked commit |
+| **我们 `tools/cursor_manager`** | 2026-05 | 自研 | (内部) | 0 | 1 manager + 1 worker (adversarial pair) + git worktree + JSONL audit | 真 NeurIPS submission，已跑通 commit 21c951a |
 
 注：FARS 这个名字现在 = Sibyl，原 FARS 仓库已 rename。"FARS"在 2025-2026 还有 [analemma.ai 自己的 blog](https://analemma.ai/blog/introducing-fars/) 介绍另一个商业版本，但我没找到独立开源代码。
 
@@ -159,7 +159,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 - Paper A 已经有 v1 draft（21 页，main.tex 50KB，包含 7 sections + 8 方程 + Algorithm 1）
 - 已有 CHECKLIST_CN, COVER_LETTER_DRAFT, REPRODUCIBILITY_PLAN, RESPONSE_PLAYBOOK 周边文档
 - 已有明确 BLOCKED-DECISION 队列
-- Manager-worker loop 已经实测产出 a tracked commit（move inductive bias discussion，0 LaTeX warning）
+- Manager-worker loop 已经实测产出 commit 21c951a（move inductive bias discussion，0 LaTeX warning）
 - Worker branch 上有 25+ 历史 commits 体现真实 paper 工作流
 
 **所以**: PaperOrchestra 不解决我们当前最紧的问题。我们当前最紧的问题是：
@@ -223,8 +223,8 @@ o1-preview 驱动达到 SOTA ML code 性能。
 **作用**: 在 worker 准备 commit 前，对 diff 中新增的引用做 Semantic Scholar API 真实性验证 + 时间 cutoff filter；对论文未引用但 Semantic Scholar 给出高 relevance 的 must-cite 给出 warning。
 
 **实现路径**: 一个独立的 codex profile + skill：
-- `sub_agents/lit_review.py`: Semantic Scholar API client（已有公开 endpoint, 不需要 key for 基础查询）
-- `skills/lit_review/SKILL.md`: codex skill 定义
+- `tools/cursor_manager/sub_agents/lit_review.py`: Semantic Scholar API client（已有公开 endpoint, 不需要 key for 基础查询）
+- `tools/cursor_manager/skills/lit_review/SKILL.md`: codex skill 定义
 - 集成点: 在 `mgr start` 提示 worker 任务时，如果任务涉及 .tex 引用变动，先调一次 lit_review sub-agent
 - 不阻塞主流：sub-agent 输出写到 `state/lit_review/<run_id>.json`，manager review 时读
 
@@ -235,7 +235,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 **作用**: worker 完成一段 commit 后，由 manager 调一个 NeurIPS reviewer persona 的 sub-agent 做 1-pass review，输出 score + concern list。**用不同 codex profile**（worker = `worker_high` → gpt-5.5；reviewer-sim = `reviewer_high` → claude-opus-4-7-thinking-high）。这就是 codex-only 路径下"跨 API 模型对抗"的具象化。
 
 **实现路径**:
-- `prompts/reviewer_sim_neurips.md`: NeurIPS reviewer persona（重点：technical soundness, novelty positioning, claim grounding, missing experiments）
+- `tools/cursor_manager/prompts/reviewer_sim_neurips.md`: NeurIPS reviewer persona（重点：technical soundness, novelty positioning, claim grounding, missing experiments）
 - `mgr review-sim <worker> --against HEAD`: 单独命令，调 codex (--profile reviewer_high) + reviewer prompt + worker diff
 - 输出: `state/reviewer_sim/<wid>/<run_id>.md`，结构化 score + concern list
 - Manager 在 review 时，把 reviewer-sim 的 concern 当 evidence。如果 reviewer-sim 说 "这个 claim 没 evidence"，manager 应该 cancel_restart 或 escalate
@@ -247,7 +247,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 **作用**: 监控 nohup loop / cron tick；如果连续 N 次 escalation 同因（比如 24h 都报"codex exec 退出 1"）就暂停循环 + 通过飞书 IM 通知人。
 
 **实现路径**:
-- `sentinel.py`: 读 audit.jsonl + escalations.jsonl，识别同因连续失败模式
+- `tools/cursor_manager/sentinel.py`: 读 audit.jsonl + escalations.jsonl，识别同因连续失败模式
 - 触发后调 `lark-im` skill 发飞书消息（注：lark skill 已经在你 ~/.claude/skills/ 下）
 - Cron 间隔执行，独立于 tick.sh
 
@@ -268,7 +268,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 | ❌ "Zero human intervention" 哲学 | 跟我们 BLOCKED-DECISION 协议根本冲突 |
 | ❌ 5-20 agent 流水线全部上 | 单论文协调成本 > 收益；agent 越多 bug 越多 |
 | ❌ Self-evolving prompt | 缺 reward signal；可能 reward-hack |
-| ❌ 完全替换我们 cursor_manager 骨架 | 已实测产出 a tracked commit 的可行性，切换 = 自寻烦恼 |
+| ❌ 完全替换我们 cursor_manager 骨架 | 已实测产出 commit 21c951a 的可行性，切换 = 自寻烦恼 |
 
 ---
 
@@ -288,7 +288,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 
 | 阶段 | 周期 | Deliverable |
 |---|---|---|
-| **0. 已完成** | done | manager-worker loop + a tracked commit + codex CLI 调通 + codex backend recipe |
+| **0. 已完成** | done | manager-worker loop + commit 21c951a + codex CLI 调通 + codex backend recipe |
 | **1. codex 化主链** | 1-2 day（已完成）| worker / manager / reviewer-sim 全切 codex（不同 profile 之间对抗）；in-loop 中 cursor-agent 已彻底删除 |
 | **2. Reviewer Simulator sub-agent** | 1 day | `mgr review-sim` 命令 + NeurIPS reviewer prompt + 输出结构化 concern list |
 | **3. Lit Review sub-agent** | 1 day | Semantic Scholar API client + 集成 mgr start |
@@ -321,7 +321,7 @@ o1-preview 驱动达到 SOTA ML code 性能。
 - PaperWritingBench (eval bench): 含在 PaperOrchestra 论文，200 papers (CVPR'25 100 + ICLR'25 100) reverse-engineered
 - FML-Bench (ICLR'26 under-review eval bench): 8 fundamental ML research problems, 5 metrics
 - Semantic Scholar API: <https://api.semanticscholar.org/> （免费，基础查询不需要 key）
-- 我们的 codex backend recipe: `docs/codex_backend_recipe.md`
+- 我们的 codex backend recipe: `tools/cursor_manager/docs/codex_backend_recipe.md`
 
 ## 附录 B：调研覆盖度声明
 
