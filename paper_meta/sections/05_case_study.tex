@@ -88,11 +88,9 @@ paragraph). Two rows are worth highlighting below the table.
     Sub-agent contract \texttt{docs/sub\_agents\_contract.md}         &   593 \\
     Sentinel module (\texttt{sentinel.py})                            &   580 \\
     Hermetic smoke-test assertions                                     & 13/13 \\
-    Commits on public OSS \texttt{main} (squashed history)            &     4 \\
     \midrule
-    \multicolumn{2}{l}{\emph{LiuLab branch history for }\texttt{tools/cursor\_manager}} \\
-    Path-scoped commits (LiuLab; \texttt{feature/autoresearch-sub-agents}) &    28 \\
-    Cumulative line insertions (path-scoped shortstat sum)            & 12,411 \\
+    \multicolumn{2}{l}{\emph{LiuLab branch (\texttt{tools/cursor\_manager}) --- integer commit/insertion totals depend on \texttt{HEAD}}} \\
+    \multicolumn{2}{l}{\footnotesize (reproduce with the \texttt{git log} one-liners in the table note below)} \\
     \texttt{[BLOCKED-DECISION]} commits raised by humans              &     0 \\
     \texttt{[BLOCKED-DECISION]} commits raised by workers             & pending\(^\dagger\) \\
     Bugs surfaced by self-test that would otherwise have shipped    &     1 \\
@@ -102,7 +100,7 @@ paragraph). Two rows are worth highlighting below the table.
 
   \medskip
   \footnotesize
-  \noindent\emph{Reproduce LOC/smoke on OSS \texttt{main}:} \texttt{wc -l mgr lib/*.py sentinel.py scripts/*.py scripts/*.sh *.sh docs/sub\_agents\_contract.md}; \texttt{bash scripts/smoke\_test\_sub\_agents.sh}. \emph{LiuLab aggregates:} from monorepo root, with \texttt{HEAD} on \texttt{feature/autoresearch-sub-agents}, run \texttt{git log --oneline HEAD -- tools/cursor\_manager | wc -l}; \texttt{git log --shortstat HEAD -- tools/cursor\_manager} (sum insertions).
+  \noindent\emph{Reproduce LOC/smoke on OSS \texttt{main}:} \texttt{wc -l mgr lib/*.py sentinel.py scripts/*.py scripts/*.sh *.sh docs/sub\_agents\_contract.md}; \texttt{bash scripts/smoke\_test\_sub\_agents.sh}. \emph{Git counters:} on the public mirror, from repo root, \texttt{git log --oneline main | wc -l}; on the LiuLab monorepo with \texttt{HEAD} on \texttt{feature/autoresearch-sub-agents}, \texttt{git log --oneline HEAD -- tools/cursor\_manager | wc -l} and \texttt{git log --shortstat HEAD -- tools/cursor\_manager} (sum insertion fields).
 
   \medskip
   \(^\dagger\)~Worker C (this paper) operates under the
