@@ -26,6 +26,12 @@ bash scripts/install_launchd.sh             # macOS: use cron/systemd on Linux
 tail -f state/log.jsonl                     # watch the manager wake every 5 minutes
 ```
 
+### `config.toml`: `[reviewer]` is the manager LLM (not `[manager]`)
+
+- **Manager codex process** (`tick.sh` / `kickoff.sh` → `_invoke_manager.py`) reads **`[reviewer]`** for the in-loop manager: `backend`, `cli_path`, `profile`, `timeout_seconds`, `prompt_path`. That is the paranoid-reviewer persona’s LLM settings.
+- **`[manager]` has no `backend` field** and does **not** choose the manager’s model. It only holds **orchestration / side-effect knobs**: `poll_interval_seconds`, `max_run_seconds`, `mode`, `log_path`, `escalations_path`, `notify_macos`, etc.
+- **Why the name `[reviewer]`?** Historical: the manager’s persona is literally a skeptical reviewer; the TOML section kept that name. When docs say “manager profile”, they mean **`[reviewer].profile`** in `config.toml`, mapped to `~/.codex/config.toml` `[profiles.*]`.
+
 To run the full self-test suite (13 hermetic checks, no network, no LLM required):
 
 ```bash
@@ -52,7 +58,7 @@ To cite (bibtex):
 
 ## 核心理念
 
-- **Manager 是 LLM**（codex `--profile manager_high` → claude-opus-4-7-thinking-high），不是 if/else
+- **Manager 是 LLM**（codex `--profile manager_high` → claude-opus-4-7-thinking-high），不是 if/else — **在 `config.toml` 里对应 `[reviewer]` 段，不是 `[manager]`**
 - **Manager 是怀疑论者**：默认假设 worker 找捷径、改 claim、跳验证
 - **Manager 跨 tick 持久化记忆**：`codex exec resume <session-id>`；cron 每 5 分钟 kick 一次它
 - **Worker 也是 codex** 的另一个 profile（`worker_high` → gpt-5.5-2026-04-24-xhigh），跑在 git worktree 里隔离不污染主分支
@@ -97,6 +103,8 @@ launchd / cron（每 5 分钟，永不停）
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+上图里 “reads `[reviewer]`” 即 **manager LLM** 的 codex 配置；不要到 `[manager]` 段里去找 `backend` / `profile`。
+
 ## 目录
 
 ```
@@ -118,7 +126,7 @@ launchd / cron（每 5 分钟，永不停）
 │
 ├── lib/
 │   ├── codex_worker.py          # ★ 本机 codex 子进程管理（in-loop 唯一 worker 后端）
-��│   ├── secrets.py               # optional keys.json loader
+│   ├── secrets.py               # optional keys.json loader
 │   ├── reviewer_sim.py          # ★ NeurIPS reviewer-sim sub-agent（codex-only）
 │   ├── lit_review.py            # ★ Semantic Scholar lit-review sub-agent
 │   ├── lark_notify.py           # ★ Lark notification helper for sentinel
@@ -191,6 +199,7 @@ cp config.example.toml config.toml
 # 编辑 config.toml:
 #   [worker]   local_repo_path = "/path/to/shaoyang-autoresearch"
 #   [worker]   worktree_base = "paper/neurips2026-draft"
+#   # manager LLM = [reviewer] 段（不是 [manager]）:
 #   [reviewer] profile = "manager_high"
 #   [worker]   profile = "worker_high"          # ≠ manager_high 才有跨 API 模型对抗
 #   [reviewer_sim] profile = "reviewer_high"    # ≠ worker profile

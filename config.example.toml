@@ -6,6 +6,9 @@
 # 跑不了 cursor。Cursor IDE 仅作为人类操作员的入口。
 
 [reviewer]
+# === In-loop MANAGER LLM (codex). tick.sh / kickoff.sh read THIS table. ===
+# NOT under [manager]: [manager] has no backend/cli_path/profile.
+# Naming legacy: manager persona = paranoid reviewer; section name stayed [reviewer].
 # Manager LLM 配置。tick.sh / kickoff.sh 都从这里读。
 # 唯一支持的 backend 是 "codex"；任何其它值会在 _invoke_manager.py
 # 启动时被立刻拒绝。
@@ -38,6 +41,7 @@ worker_branch_prefix = "paper/neurips2026-draft-worker-"
 default_timeout_seconds = 1800
 
 [manager]
+# Orchestration only (poll/escalation/log/mode). Manager LLM codex settings → see [reviewer] above.
 poll_interval_seconds = 300          # 5 分钟检查一次
 max_run_seconds = 1800               # 单个 run 最长 30 分钟
 max_consecutive_restarts = 2         # 连续 cancel_restart 上限，超则 escalate

@@ -104,7 +104,9 @@ codex exec resume --last --color never "next instruction" < /dev/null
 
 1. ✅ **`config.toml`**: only `backend = "codex"` is accepted under both
    `[reviewer]` (manager) and `[worker]`; `_invoke_manager.py` and `mgr`
-   reject any other value at load time. Use `[reviewer].profile` /
+   reject any other value at load time. **There is no `[manager].backend`:**
+   `[manager]` only stores scheduler / logging fields (`poll_interval_seconds`,
+   `mode`, `log_path`, …). Use `[reviewer].profile` /
    `[worker].profile` / `[reviewer_sim].profile` to select different
    `~/.codex/config.toml [profiles.<key>]` blocks per role. The `model`
    field has been removed from the schema.
